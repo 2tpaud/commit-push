@@ -81,6 +81,7 @@ body {
 - Badge
 - Checkbox
 - Tabs
+- Table
 
 ## 버튼 스타일
 
@@ -88,7 +89,7 @@ body {
 - 배경: 검정색 (`bg-black`)
 - 텍스트: 흰색 (`text-white`)
 - 호버: 검정색 90% 투명도 (`hover:bg-black/90`)
-- 사용 예: 로그아웃, 새 노트 생성, 작업 로그, 홈으로
+- 사용 예: 로그아웃, 새 노트 생성, 작업 로그, 개발자 노트, 홈으로
 
 ### 아웃라인 버튼 (variant="outline")
 - 배경: 투명
@@ -158,7 +159,29 @@ body {
 - 선택된 항목: 검정색 배경, 흰색 텍스트 (`bg-black text-white`)
 - 키보드 네비게이션 지원 (ArrowDown/Up, Enter, Escape)
 
-## 카드뷰 스타일 (작업 로그, 연관 노트 검색)
+## Data Table 스타일 (작업 로그, 연관 노트 검색, 개발자 노트)
+
+### 사용 위치
+- 작업 로그 페이지 (`app/activity/page.tsx`) — 노트 생성 내역
+- 연관 노트 검색 다이얼로그 — 노트 선택 목록
+- 개발자 노트 페이지 (`app/developer-notes/page.tsx`) — 노트 목록
+
+### 테이블 스타일
+- 컨테이너: `rounded-md border`
+- 정렬: 컬럼 헤더 클릭 시 정렬 (작업 로그, 연관 노트 검색)
+- 행 호버: `hover:bg-muted/50`
+- 선택 행 강조: `data-state="selected"` 또는 `bg-muted` (연관 노트 검색)
+
+### 작업 로그 / 연관 노트 검색 컬럼
+- 카테고리, 제목, 태그, 생성일, 최종 수정일, 작업(버튼)
+- 설명(description) 컬럼은 사용하지 않음
+
+### 개발자 노트 컬럼
+- 제목, 내용 미리보기, 생성일, 수정일, 작업(버튼)
+
+## 카드뷰 스타일 (참고용)
+
+다른 화면에서 카드 형태 레이아웃이 필요할 때 참고.
 
 ### 카드 컨테이너
 - 배경: `bg-card`
@@ -173,7 +196,7 @@ body {
   - Badge variant="secondary"
   - 형식: "대분류 > 중분류 > 소분류"
 - **제목**: 카테고리 아래 (`pt-6`), `text-lg font-semibold`
-- **설명**: 제목 아래, `text-sm text-muted-foreground`
+- **설명**: 제목 아래, `text-sm text-muted-foreground` (필요 시)
 - **태그 및 날짜**: 같은 줄에 좌우 정렬
   - 태그: 좌측 정렬, Badge variant="outline", `#{tag}` 형식
   - 날짜: 우측 정렬, `text-xs text-muted-foreground`
@@ -195,4 +218,5 @@ body {
 5. **다크모드 지원**: CSS 변수 사용으로 자동 지원되도록 유지
 6. **자동완성 하이라이트**: 검정색 배경(`bg-black`)과 흰색 텍스트(`text-white`) 사용
 7. **태그 표시**: 항상 Badge variant="outline" 사용, `#{tag}` 형식 유지
-8. **카드뷰 레이아웃**: 작업 로그와 연관 노트 검색에서 동일한 구조 유지
+8. **Data Table**: 작업 로그, 연관 노트 검색, 개발자 노트는 shadcn Table + @tanstack/react-table 사용
+9. **카드뷰 레이아웃**: 카드 형태 UI가 필요할 때 위 카드뷰 스타일 참고

@@ -119,10 +119,10 @@ export default function Auth() {
             </h2>
             <div className="flex gap-2">
               <Button variant="default" asChild>
-                <a href="/activity">작업 로그</a>
+                <a href="/developer-notes">개발자 노트</a>
               </Button>
               <Button variant="default" asChild>
-                <a href="/developer-notes">개발자 노트</a>
+                <a href="/activity">작업 로그</a>
               </Button>
               <Button variant="default" onClick={() => setShowNewNoteDialog(true)}>
                 새 노트 생성
