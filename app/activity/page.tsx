@@ -14,6 +14,7 @@ import {
 import { supabase } from '@/lib/supabaseClient'
 import type { User } from '@supabase/supabase-js'
 import NewNoteDialog from '@/components/NewNoteDialog'
+import CommitPushDialog from '@/components/CommitPushDialog'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
@@ -39,6 +40,18 @@ interface Note {
   updated_at: string
 }
 
+interface CommitRow {
+  id: string
+  note_id: string
+  title: string
+  message: string | null
+  reference_urls: string[] | null
+  created_at: string
+  updated_at: string
+}
+
+type CommitSortKey = 'note' | 'title' | 'message' | 'created_at' | 'updated_at'
+
 type TabType = 'notes' | 'commits'
 
 export default function ActivityPage() {
@@ -47,10 +60,16 @@ export default function ActivityPage() {
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<TabType>('notes')
   const [notes, setNotes] = useState<Note[]>([])
+  const [commits, setCommits] = useState<CommitRow[]>([])
+  const [noteTitleByNoteId, setNoteTitleByNoteId] = useState<Record<string, string>>({})
   const [deletingNoteId, setDeletingNoteId] = useState<string | null>(null)
+  const [deletingCommitId, setDeletingCommitId] = useState<string | null>(null)
   const [showNewNoteDialog, setShowNewNoteDialog] = useState(false)
+  const [showCommitPushDialog, setShowCommitPushDialog] = useState(false)
+  const [editingCommitId, setEditingCommitId] = useState<string | null>(null)
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null)
-  const [sorting, setSorting] = useState<SortingState>([])
+  const [sorting, setSorting] = useState<SortingState>([{ id: 'updated_at', desc: true }])
+  const [commitSort, setCommitSort] = useState<{ key: CommitSortKey; asc: boolean }>({ key: 'updated_at', asc: false })
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -61,6 +80,7 @@ export default function ActivityPage() {
       setUser(session.user)
       setLoading(false)
       loadNotes(session.user.id)
+      loadCommits(session.user.id)
     })
   }, [router])
 
@@ -79,6 +99,57 @@ export default function ActivityPage() {
     if (data) {
       setNotes(data)
     }
+  }
+
+  const loadCommits = async (userId: string) => {
+    const { data, error } = await supabase
+      .from('commits')
+      .select('id, note_id, title, message, reference_urls, created_at, updated_at')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+
+    if (error) {
+      console.error('Error loading commits:', error)
+      return
+    }
+
+    const list = (data as CommitRow[]) ?? []
+    setCommits(list)
+
+    const noteIds = [...new Set(list.map((c) => c.note_id).filter(Boolean))]
+    if (noteIds.length > 0) {
+      const { data: notesData } = await supabase
+        .from('notes')
+        .select('id, title')
+        .in('id', noteIds)
+      const map: Record<string, string> = {}
+      notesData?.forEach((n: { id: string; title: string }) => {
+        map[n.id] = n.title ?? ''
+      })
+      setNoteTitleByNoteId(map)
+    } else {
+      setNoteTitleByNoteId({})
+    }
+  }
+
+  const sortedCommits = useMemo(() => {
+    const { key, asc } = commitSort
+    return [...commits].sort((a, b) => {
+      let cmp = 0
+      if (key === 'note') {
+        const na = noteTitleByNoteId[a.note_id] ?? ''
+        const nb = noteTitleByNoteId[b.note_id] ?? ''
+        cmp = na.localeCompare(nb, 'ko')
+      } else if (key === 'title') cmp = (a.title ?? '').localeCompare(b.title ?? '', 'ko')
+      else if (key === 'message') cmp = (a.message ?? '').localeCompare(b.message ?? '', 'ko')
+      else if (key === 'created_at') cmp = new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      else if (key === 'updated_at') cmp = new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime()
+      return asc ? cmp : -cmp
+    })
+  }, [commits, commitSort, noteTitleByNoteId])
+
+  const toggleCommitSort = (key: CommitSortKey) => {
+    setCommitSort((prev) => (prev?.key === key ? { key, asc: !prev.asc } : { key, asc: true }))
   }
 
   const handleDeleteNote = async (noteId: string) => {
@@ -105,8 +176,16 @@ export default function ActivityPage() {
     if (!confirm('이 커밋을 삭제하시겠습니까?')) {
       return
     }
-    // TODO: 커밋 삭제 로직 구현 (커밋 테이블 생성 후)
-    console.log('Delete commit:', commitId)
+    setDeletingCommitId(commitId)
+    const { error } = await supabase.from('commits').delete().eq('id', commitId)
+    if (error) {
+      console.error('Error deleting commit:', error)
+      alert('커밋 삭제에 실패했습니다.')
+      setDeletingCommitId(null)
+      return
+    }
+    setCommits((prev) => prev.filter((c) => c.id !== commitId))
+    setDeletingCommitId(null)
   }
 
   const columns = useMemo<ColumnDef<Note>[]>(
@@ -347,7 +426,7 @@ export default function ActivityPage() {
                   노트 생성 내역 ({notes.length})
                 </TabsTrigger>
                 <TabsTrigger value="commits">
-                  커밋푸시 내역 (0)
+                  커밋푸시 내역 ({commits.length})
                 </TabsTrigger>
               </TabsList>
               {activeTab === 'notes' && (
@@ -356,6 +435,19 @@ export default function ActivityPage() {
                   size="icon"
                   onClick={() => setShowNewNoteDialog(true)}
                   title="새 노트 추가"
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
+              )}
+              {activeTab === 'commits' && (
+                <Button
+                  variant="default"
+                  size="icon"
+                  onClick={() => {
+                    setEditingCommitId(null)
+                    setShowCommitPushDialog(true)
+                  }}
+                  title="커밋푸시 작성"
                 >
                   <Plus className="h-4 w-4" />
                 </Button>
@@ -429,53 +521,122 @@ export default function ActivityPage() {
 
             {/* 커밋푸시 내역 탭 */}
             <TabsContent value="commits">
-              <div className="space-y-4">
+              {commits.length === 0 ? (
                 <div className="rounded-lg border bg-card p-8 text-center">
                   <p className="mb-2 text-muted-foreground">
                     커밋푸시 내역이 없습니다.
                   </p>
                   <p className="text-sm text-muted-foreground">
-                    커밋 기능은 준비 중입니다.
+                    헤더의 &apos;커밋푸시&apos; 버튼으로 노트에 커밋을 추가할 수 있습니다.
                   </p>
+                  <Button onClick={() => setShowCommitPushDialog(true)} className="mt-4">
+                    커밋푸시 하기
+                  </Button>
                 </div>
-
-                {/* 커밋 목록 폼 (데이터 없음) */}
-                <div className="rounded-lg border border-border bg-card p-6">
-                  <h3 className="mb-4 text-lg font-semibold text-card-foreground">
-                    커밋 목록 (준비 중)
-                  </h3>
-                  <div className="space-y-3">
-                    {/* 예시 커밋 항목 (UI만) */}
-                    <div className="flex items-center justify-between rounded-lg border border-border bg-muted p-4 opacity-50">
-                      <div className="flex-1">
-                        <div className="mb-1 flex items-center gap-2">
-                          <span className="text-sm font-medium text-muted-foreground">
-                            예시 커밋 메시지
-                          </span>
-                          <Badge variant="secondary">카테고리</Badge>
-                        </div>
-                        <p className="text-xs text-muted-foreground">
-                          노트: 예시 노트 제목
-                        </p>
-                        <p className="mt-1 text-xs text-muted-foreground/70">
-                          2024-01-01 12:00:00
-                        </p>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        disabled
-                        title="커밋 삭제 (준비 중)"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                  <p className="mt-4 text-sm text-muted-foreground">
-                    커밋 테이블 생성 후 실제 데이터가 표시됩니다.
-                  </p>
+              ) : (
+                <div className="rounded-md border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>
+                          <Button
+                            variant="ghost"
+                            onClick={() => toggleCommitSort('note')}
+                            className="h-8 px-2"
+                          >
+                            노트
+                            <ArrowUpDown className="ml-2 h-4 w-4" />
+                          </Button>
+                        </TableHead>
+                        <TableHead>
+                          <Button
+                            variant="ghost"
+                            onClick={() => toggleCommitSort('title')}
+                            className="h-8 px-2"
+                          >
+                            제목
+                            <ArrowUpDown className="ml-2 h-4 w-4" />
+                          </Button>
+                        </TableHead>
+                        <TableHead>
+                          <Button
+                            variant="ghost"
+                            onClick={() => toggleCommitSort('message')}
+                            className="h-8 px-2"
+                          >
+                            메모
+                            <ArrowUpDown className="ml-2 h-4 w-4" />
+                          </Button>
+                        </TableHead>
+                        <TableHead>
+                          <Button
+                            variant="ghost"
+                            onClick={() => toggleCommitSort('created_at')}
+                            className="h-8 px-2"
+                          >
+                            생성일
+                            <ArrowUpDown className="ml-2 h-4 w-4" />
+                          </Button>
+                        </TableHead>
+                        <TableHead>
+                          <Button
+                            variant="ghost"
+                            onClick={() => toggleCommitSort('updated_at')}
+                            className="h-8 px-2"
+                          >
+                            최종 수정일
+                            <ArrowUpDown className="ml-2 h-4 w-4" />
+                          </Button>
+                        </TableHead>
+                        <TableHead className="w-24">작업</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {sortedCommits.map((commit) => (
+                        <TableRow key={commit.id}>
+                          <TableCell className="font-medium">
+                            {noteTitleByNoteId[commit.note_id] ?? '-'}
+                          </TableCell>
+                          <TableCell>{commit.title || '-'}</TableCell>
+                          <TableCell className="max-w-xs truncate text-muted-foreground">
+                            {commit.message || '-'}
+                          </TableCell>
+                          <TableCell className="text-muted-foreground text-xs whitespace-nowrap">
+                            {new Date(commit.created_at).toLocaleString('ko-KR')}
+                          </TableCell>
+                          <TableCell className="text-muted-foreground text-xs whitespace-nowrap">
+                            {new Date(commit.updated_at).toLocaleString('ko-KR')}
+                          </TableCell>
+                          <TableCell className="w-24">
+                            <div className="flex items-center gap-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => {
+                                  setShowCommitPushDialog(false)
+                                  setEditingCommitId(commit.id)
+                                }}
+                                title="커밋 수정"
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleDeleteCommit(commit.id)}
+                                disabled={deletingCommitId === commit.id}
+                                title="커밋 삭제"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
                 </div>
-              </div>
+              )}
             </TabsContent>
           </Tabs>
         </div>
@@ -483,6 +644,18 @@ export default function ActivityPage() {
 
       {user && (
         <>
+          <CommitPushDialog
+            user={user}
+            isOpen={showCommitPushDialog || !!editingCommitId}
+            onClose={() => {
+              setShowCommitPushDialog(false)
+              setEditingCommitId(null)
+            }}
+            onSuccess={() => {
+              if (user) loadCommits(user.id)
+            }}
+            commitId={editingCommitId ?? undefined}
+          />
           <NewNoteDialog
             user={user}
             isOpen={showNewNoteDialog}

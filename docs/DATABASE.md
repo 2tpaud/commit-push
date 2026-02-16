@@ -376,3 +376,144 @@ with check (auth.uid() = user_id);
 - **Row Level Security (RLS)**: 활성화됨
 - **정책**: "Users can manage own developer notes"
   - 사용자는 자신의 개발자 노트만 조회/수정/삭제 가능 (`auth.uid() = user_id`)
+
+## commits 테이블
+
+### 테이블 생성
+
+```sql
+--------------------------------------------------
+-- 1. COMMITS TABLE 생성
+--------------------------------------------------
+
+create table public.commits (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users(id) on delete cascade,
+  note_id uuid not null references public.notes(id) on delete cascade,
+
+  title text not null,
+  message text,
+
+  attachments jsonb default '[]',
+  reference_urls text[] default '{}',
+
+  sequence integer default 0,
+
+  created_at timestamp with time zone default now(),
+  updated_at timestamp with time zone default now(),
+
+  -- 생성일 지정으로 사용자가 입력한 경우만 true. 수정 시 생성일 필드 노출 여부 판단용
+  created_at_is_custom boolean default false
+);
+
+--------------------------------------------------
+-- 2. 컬럼 설명 (COMMENT)
+--------------------------------------------------
+
+comment on table public.commits is
+'CommitPush의 커밋 테이블. 노트에 대한 시간축 기록(커밋)을 저장한다.';
+
+comment on column public.commits.id is
+'커밋의 고유 식별자(UUID). 기본키.';
+
+comment on column public.commits.user_id is
+'커밋 작성자. auth.users.id와 연결됨.';
+
+comment on column public.commits.note_id is
+'이 커밋이 속한 노트. notes.id와 연결됨.';
+
+comment on column public.commits.title is
+'커밋 제목. 필수 입력값.';
+
+comment on column public.commits.message is
+'커밋 본문(메모). 선택 입력.';
+
+comment on column public.commits.attachments is
+'첨부파일 목록. jsonb 배열. 예: [{"file_id","name","web_view_link","mime_type"}]';
+
+comment on column public.commits.reference_urls is
+'참고 URL 목록. 다중 입력.';
+
+comment on column public.commits.sequence is
+'같은 노트 내 커밋 순서. 노트별 타임라인 정렬용.';
+
+comment on column public.commits.created_at is
+'커밋푸시 버튼 클릭 시점(저장 시각).';
+
+comment on column public.commits.updated_at is
+'커밋 최종 수정 시각.';
+
+comment on column public.commits.created_at_is_custom is
+'생성일을 사용자가 생성일 지정으로 입력했으면 true. 수정 다이얼로그에서 생성일 지정 필드에 기존 값을 채울지 여부 판단용.';
+
+--------------------------------------------------
+-- 3. updated_at 자동 갱신 트리거
+--------------------------------------------------
+
+drop trigger if exists trigger_set_updated_at_commits on public.commits;
+
+create trigger trigger_set_updated_at_commits
+before update on public.commits
+for each row
+execute function public.set_updated_at();
+
+--------------------------------------------------
+-- 4. RLS 활성화
+--------------------------------------------------
+
+alter table public.commits enable row level security;
+
+--------------------------------------------------
+-- 5. RLS 정책
+--------------------------------------------------
+
+drop policy if exists "Users can manage own commits" on public.commits;
+
+create policy "Users can manage own commits"
+on public.commits
+for all
+using (auth.uid() = user_id)
+with check (auth.uid() = user_id);
+
+--------------------------------------------------
+-- 6. 인덱스 (노트별 커밋 조회)
+--------------------------------------------------
+
+create index if not exists idx_commits_note_id on public.commits(note_id);
+create index if not exists idx_commits_created_at on public.commits(created_at desc);
+
+--------------------------------------------------
+-- 7. notes.commit_count, last_commit_at 갱신 트리거
+--------------------------------------------------
+
+create or replace function public.update_note_commit_stats()
+returns trigger as $$
+begin
+  if tg_op = 'INSERT' then
+    update public.notes
+    set
+      commit_count = coalesce(commit_count, 0) + 1,
+      last_commit_at = new.created_at
+    where id = new.note_id;
+  elsif tg_op = 'DELETE' then
+    update public.notes
+    set commit_count = greatest(coalesce(commit_count, 0) - 1, 0)
+    where id = old.note_id;
+  end if;
+  return coalesce(new, old);
+end;
+$$ language plpgsql security definer;
+
+drop trigger if exists trigger_update_note_commit_stats on public.commits;
+
+create trigger trigger_update_note_commit_stats
+after insert or delete on public.commits
+for each row
+execute function public.update_note_commit_stats();
+```
+
+### 보안 정책
+
+- **Row Level Security (RLS)**: 활성화됨
+- **정책**: "Users can manage own commits"
+  - 사용자는 자신의 커밋만 조회/수정/삭제 가능 (`auth.uid() = user_id`)

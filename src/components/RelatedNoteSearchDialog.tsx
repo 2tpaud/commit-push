@@ -33,6 +33,7 @@ import {
   TableHeader,
   TableRow,
 } from './ui/table'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs'
 import { ArrowUpDown } from 'lucide-react'
 
 interface Note {
@@ -53,6 +54,10 @@ interface RelatedNoteSearchDialogProps {
   onClose: () => void
   onSelect: (noteIds: string[]) => void
   excludeNoteIds?: string[] // 이미 선택된 노트 ID들 제외
+  /** true면 한 개만 선택 가능. 노트 선택(커밋푸시 등)용 */
+  singleSelect?: boolean
+  /** 다이얼로그 제목. singleSelect 시 "노트 선택" 등 */
+  dialogTitle?: string
 }
 
 export default function RelatedNoteSearchDialog({
@@ -61,10 +66,14 @@ export default function RelatedNoteSearchDialog({
   onClose,
   onSelect,
   excludeNoteIds = [],
+  singleSelect = false,
+  dialogTitle,
 }: RelatedNoteSearchDialogProps) {
   const [notes, setNotes] = useState<Note[]>([])
   const [loading, setLoading] = useState(false)
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({})
+  const [selectedId, setSelectedId] = useState<string | null>(null) // singleSelect일 때만 사용 (테이블 rowSelection과 분리해 멈춤 방지)
+  const [titleSearch, setTitleSearch] = useState('')
   const [tagSearch, setTagSearch] = useState('')
   const [sorting, setSorting] = useState<SortingState>([])
 
@@ -78,6 +87,12 @@ export default function RelatedNoteSearchDialog({
   // 필터링된 노트
   const filteredNotes = useMemo(() => {
     let filtered = [...notes]
+
+    // 제목 검색 필터링
+    if (titleSearch.trim()) {
+      const q = titleSearch.trim().toLowerCase()
+      filtered = filtered.filter((note) => note.title.toLowerCase().includes(q))
+    }
 
     // 태그 검색 필터링
     if (tagSearch.trim()) {
@@ -104,7 +119,7 @@ export default function RelatedNoteSearchDialog({
     }
 
     return filtered
-  }, [notes, tagSearch, excludeNoteIds])
+  }, [notes, titleSearch, tagSearch, excludeNoteIds])
 
   const loadNotes = async () => {
     setLoading(true)
@@ -132,20 +147,38 @@ export default function RelatedNoteSearchDialog({
     () => [
       {
         id: 'select',
-        header: ({ table }) => (
-          <Checkbox
-            checked={table.getIsAllPageRowsSelected()}
-            onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
-            aria-label="Select all"
-          />
-        ),
-        cell: ({ row }) => (
-          <Checkbox
-            checked={row.getIsSelected()}
-            onCheckedChange={(value) => row.toggleSelected(!!value)}
-            aria-label="Select row"
-          />
-        ),
+        header: ({ table }) =>
+          singleSelect ? (
+            <span className="text-muted-foreground text-xs">선택</span>
+          ) : (
+            <Checkbox
+              checked={table.getIsAllPageRowsSelected()}
+              onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+              aria-label="Select all"
+            />
+          ),
+        cell: ({ row, table }) => {
+          const isSelected = singleSelect
+            ? selectedId === row.original.id
+            : !!table.getState().rowSelection[row.original.id]
+          return (
+            <Checkbox
+              checked={isSelected}
+              onCheckedChange={(value) => {
+                if (singleSelect) {
+                  setSelectedId(!!value ? row.original.id : null)
+                } else {
+                  setRowSelection((old) => ({
+                    ...old,
+                    [row.original.id]: !!value,
+                  }))
+                }
+              }}
+              onClick={(e) => e.stopPropagation()}
+              aria-label="Select row"
+            />
+          )
+        },
         enableSorting: false,
         enableHiding: false,
       },
@@ -276,31 +309,41 @@ export default function RelatedNoteSearchDialog({
         },
       },
     ],
-    []
+    [singleSelect, selectedId]
   )
+
+  const rowSelectionForTable = singleSelect
+    ? (selectedId ? { [selectedId]: true } : {})
+    : rowSelection
 
   const table = useReactTable({
     data: filteredNotes,
     columns,
+    getRowId: (row) => (row as Note).id,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     onSortingChange: setSorting,
-    onRowSelectionChange: setRowSelection,
+    onRowSelectionChange: singleSelect
+      ? () => {} // 단일 선택은 selectedId로만 처리
+      : setRowSelection,
     enableRowSelection: true,
     state: {
       sorting,
-      rowSelection,
+      rowSelection: rowSelectionForTable,
     },
   })
 
   const selectedNoteIds = useMemo(() => {
-    return table.getSelectedRowModel().rows.map((row) => row.original.id)
-  }, [rowSelection, table])
+    if (singleSelect) return selectedId ? [selectedId] : []
+    return Object.keys(rowSelection).filter((id) => rowSelection[id])
+  }, [singleSelect, selectedId, rowSelection])
 
   const handleApply = () => {
     onSelect(selectedNoteIds)
     setRowSelection({})
+    setSelectedId(null)
+    setTitleSearch('')
     setTagSearch('')
     setSorting([])
     onClose()
@@ -308,6 +351,8 @@ export default function RelatedNoteSearchDialog({
 
   const handleCancel = () => {
     setRowSelection({})
+    setSelectedId(null)
+    setTitleSearch('')
     setTagSearch('')
     setSorting([])
     onClose()
@@ -317,21 +362,44 @@ export default function RelatedNoteSearchDialog({
     <Dialog open={isOpen} onOpenChange={(open) => !open && handleCancel()}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
         <DialogHeader>
-          <DialogTitle>연관 노트 검색</DialogTitle>
+          <DialogTitle>{dialogTitle ?? '연관 노트 검색'}</DialogTitle>
         </DialogHeader>
 
-        {/* Search Controls */}
+        {/* Search Controls (탭) */}
         <div className="border-b bg-muted p-6">
-          <div>
-            <Label>태그로 검색</Label>
-            <Input
-              type="text"
-              value={tagSearch}
-              onChange={(e) => setTagSearch(e.target.value)}
-              placeholder="태그를 콤마(,)로 구분하여 입력 (예: 프로젝트, 개발)"
-              className="mt-2"
-            />
-          </div>
+          <Tabs
+            defaultValue="title"
+            className="w-full"
+            onValueChange={() => {
+              setTitleSearch('')
+              setTagSearch('')
+            }}
+          >
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="title">제목으로 검색</TabsTrigger>
+              <TabsTrigger value="tag">태그로 검색</TabsTrigger>
+            </TabsList>
+            <TabsContent value="title" className="mt-4">
+              <Label>제목으로 검색</Label>
+              <Input
+                type="text"
+                value={titleSearch}
+                onChange={(e) => setTitleSearch(e.target.value)}
+                placeholder="노트 제목으로 검색"
+                className="mt-2"
+              />
+            </TabsContent>
+            <TabsContent value="tag" className="mt-4">
+              <Label>태그로 검색</Label>
+              <Input
+                type="text"
+                value={tagSearch}
+                onChange={(e) => setTagSearch(e.target.value)}
+                placeholder="태그를 콤마(,)로 구분하여 입력 (예: 프로젝트, 개발)"
+                className="mt-2"
+              />
+            </TabsContent>
+          </Tabs>
         </div>
 
         {/* Notes Table */}
@@ -342,7 +410,7 @@ export default function RelatedNoteSearchDialog({
             </div>
           ) : filteredNotes.length === 0 ? (
             <div className="py-8 text-center text-muted-foreground">
-              {tagSearch.trim()
+              {(titleSearch.trim() || tagSearch.trim())
                 ? '검색 결과가 없습니다.'
                 : '노트가 없습니다.'}
             </div>
@@ -373,7 +441,17 @@ export default function RelatedNoteSearchDialog({
                       <TableRow
                         key={row.id}
                         data-state={row.getIsSelected() && 'selected'}
-                        className={row.getIsSelected() ? 'bg-muted' : ''}
+                        className={`${row.getIsSelected() ? 'bg-muted' : ''} cursor-pointer`}
+                        onClick={() => {
+                          if (singleSelect) {
+                            setSelectedId((prev) => (prev === row.original.id ? null : row.original.id))
+                          } else {
+                            setRowSelection((prev) => ({
+                              ...prev,
+                              [row.original.id]: !prev[row.original.id],
+                            }))
+                          }
+                        }}
                       >
                         {row.getVisibleCells().map((cell) => (
                           <TableCell key={cell.id}>
@@ -422,7 +500,7 @@ export default function RelatedNoteSearchDialog({
                 onClick={handleApply}
                 disabled={selectedNoteIds.length === 0}
               >
-                적용 ({selectedNoteIds.length})
+                {singleSelect ? '선택' : `적용 (${selectedNoteIds.length})`}
               </Button>
             </div>
           </div>

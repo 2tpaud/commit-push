@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '../lib/supabaseClient'
 import type { User } from '@supabase/supabase-js'
 import NewNoteDialog from './NewNoteDialog'
+import CommitPushDialog from './CommitPushDialog'
 import { Button } from './ui/button'
 
 export default function Auth() {
@@ -12,6 +13,7 @@ export default function Auth() {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
   const [showNewNoteDialog, setShowNewNoteDialog] = useState(false)
+  const [showCommitPushDialog, setShowCommitPushDialog] = useState(false)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -124,6 +126,9 @@ export default function Auth() {
               <Button variant="default" asChild>
                 <a href="/activity">작업 로그</a>
               </Button>
+              <Button variant="default" onClick={() => setShowCommitPushDialog(true)}>
+                커밋푸시
+              </Button>
               <Button variant="default" onClick={() => setShowNewNoteDialog(true)}>
                 새 노트 생성
               </Button>
@@ -141,11 +146,18 @@ export default function Auth() {
       </main>
 
       {user && (
-        <NewNoteDialog
-          user={user}
-          isOpen={showNewNoteDialog}
-          onClose={() => setShowNewNoteDialog(false)}
-        />
+        <>
+          <NewNoteDialog
+            user={user}
+            isOpen={showNewNoteDialog}
+            onClose={() => setShowNewNoteDialog(false)}
+          />
+          <CommitPushDialog
+            user={user}
+            isOpen={showCommitPushDialog}
+            onClose={() => setShowCommitPushDialog(false)}
+          />
+        </>
       )}
     </div>
   )

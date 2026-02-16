@@ -9,8 +9,8 @@
 - 폴백: Arial, Helvetica, sans-serif
 
 ### 설정 위치
-- `app/layout.tsx`: Next.js Google Fonts를 통한 폰트 로드
-- `app/globals.css`: 전역 폰트 패밀리 설정
+- `app/layout.tsx`: Next.js Google Fonts를 통한 폰트 로드 (`Noto_Sans`, variable `--font-noto-sans`)
+- `app/globals.css`: 전역 폰트 패밀리 및 배경/전경색 적용 (`body { font-family: var(--font-noto-sans), ... }`)
 
 ```typescript
 // app/layout.tsx
@@ -64,6 +64,8 @@ body {
 - `--border`: 0 0% 20% (어두운 회색)
 - `--input`: 0 0% 20% (어두운 회색)
 
+기타 컴포넌트에서 사용하는 변수(`--popover`, `--accent`, `--accent-foreground`, `--ring`, `--radius`, `--destructive` 등)는 `app/globals.css` 참고. Tailwind는 `@import "tailwindcss"`로 로드.
+
 ## UI 컴포넌트 라이브러리
 
 ### shadcn/ui
@@ -89,7 +91,7 @@ body {
 - 배경: 검정색 (`bg-black`)
 - 텍스트: 흰색 (`text-white`)
 - 호버: 검정색 90% 투명도 (`hover:bg-black/90`)
-- 사용 예: 로그아웃, 새 노트 생성, 작업 로그, 개발자 노트, 홈으로
+- 사용 예: 로그아웃, 새 노트 추가, 커밋푸시, 작업 로그 탭·개발자 노트·홈으로 이동 등
 
 ### 아웃라인 버튼 (variant="outline")
 - 배경: 투명
@@ -100,6 +102,11 @@ body {
 - 배경: 없음
 - 호버: `bg-accent`
 
+### 버튼 크기 (size)
+- `default`: h-9 px-4 py-2
+- `sm`, `lg`: 작은/큰 버튼
+- `icon`: h-9 w-9 (아이콘 전용, 예: 작업 로그의 새 노트 추가 `Plus` 버튼)
+
 ## 다이얼로그 스타일
 
 ### 오버레이
@@ -107,10 +114,8 @@ body {
 - 전체 화면 덮음
 
 ### 다이얼로그 콘텐츠
-- 배경: 흰색 (`bg-white`)
-- 테두리: `border`
-- 그림자: `shadow-lg`
-- 둥근 모서리: `sm:rounded-lg`
+- 배경: 흰색 (`bg-white`), 테두리: `border`, 그림자: `shadow-lg`, 둥근 모서리: `sm:rounded-lg`
+- 구현: `src/components/ui/dialog.tsx` (DialogOverlay `bg-black/80`, DialogContent `border bg-white p-6 shadow-lg sm:rounded-lg`)
 
 ## 입력 필드 스타일
 
@@ -159,22 +164,27 @@ body {
 - 선택된 항목: 검정색 배경, 흰색 텍스트 (`bg-black text-white`)
 - 키보드 네비게이션 지원 (ArrowDown/Up, Enter, Escape)
 
-## Data Table 스타일 (작업 로그, 연관 노트 검색, 개발자 노트)
+## Data Table 스타일 (작업 로그, 연관 노트 검색, 노트 선택, 개발자 노트)
 
 ### 사용 위치
-- 작업 로그 페이지 (`app/activity/page.tsx`) — 노트 생성 내역
-- 연관 노트 검색 다이얼로그 — 노트 선택 목록
+- 작업 로그 페이지 (`app/activity/page.tsx`) — 노트 생성 내역 탭, 커밋푸시 내역 탭
+- 연관 노트 검색 다이얼로그 (`RelatedNoteSearchDialog`) — 다중/단일 노트 선택 목록
+- 노트 선택 다이얼로그 (`NoteSelectDialog`) — 커밋푸시용 단일 노트 선택
 - 개발자 노트 페이지 (`app/developer-notes/page.tsx`) — 노트 목록
 
 ### 테이블 스타일
 - 컨테이너: `rounded-md border`
-- 정렬: 컬럼 헤더 클릭 시 정렬 (작업 로그, 연관 노트 검색)
+- 정렬: 컬럼 헤더 클릭 시 정렬 (작업 로그 노트/커밋 탭, 연관 노트 검색, 노트 선택)
 - 행 호버: `hover:bg-muted/50`
-- 선택 행 강조: `data-state="selected"` 또는 `bg-muted` (연관 노트 검색)
+- 선택 행 강조: `data-state="selected"` 또는 `bg-muted` (연관 노트 검색, 노트 선택)
+- 라이브러리: shadcn Table + `@tanstack/react-table`
 
-### 작업 로그 / 연관 노트 검색 컬럼
-- 카테고리, 제목, 태그, 생성일, 최종 수정일, 작업(버튼)
-- 설명(description) 컬럼은 사용하지 않음
+### 작업 로그 컬럼
+- **노트 생성 내역**: 카테고리, 제목, 태그, 생성일, 최종 수정일, 작업(버튼). 설명(description) 컬럼은 사용하지 않음.
+- **커밋푸시 내역**: 노트(제목), 제목, 메모, 생성일, 최종 수정일, 작업(편집/삭제 버튼)
+
+### 연관 노트 검색 / 노트 선택 테이블 컬럼
+- 선택(체크박스), 카테고리, 제목, 태그, 생성일, 최종 수정일, 정렬 버튼
 
 ### 개발자 노트 컬럼
 - 제목, 내용 미리보기, 생성일, 수정일, 작업(버튼)
@@ -218,5 +228,5 @@ body {
 5. **다크모드 지원**: CSS 변수 사용으로 자동 지원되도록 유지
 6. **자동완성 하이라이트**: 검정색 배경(`bg-black`)과 흰색 텍스트(`text-white`) 사용
 7. **태그 표시**: 항상 Badge variant="outline" 사용, `#{tag}` 형식 유지
-8. **Data Table**: 작업 로그, 연관 노트 검색, 개발자 노트는 shadcn Table + @tanstack/react-table 사용
+8. **Data Table**: 작업 로그(노트/커밋푸시 탭), 연관 노트 검색, 노트 선택 다이얼로그, 개발자 노트는 shadcn Table + @tanstack/react-table 사용
 9. **카드뷰 레이아웃**: 카드 형태 UI가 필요할 때 위 카드뷰 스타일 참고
