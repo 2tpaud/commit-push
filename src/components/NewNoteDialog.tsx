@@ -196,7 +196,7 @@ export default function NewNoteDialog({
         if (note.category_medium) mediumSet.add(note.category_medium)
         if (note.category_small) smallSet.add(note.category_small)
         if (note.tags && note.tags.length > 0) {
-          note.tags.forEach((tag) => tagsSet.add(tag))
+          note.tags.forEach((tag: string) => tagsSet.add(tag))
         }
       })
 
