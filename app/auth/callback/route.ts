@@ -25,7 +25,27 @@ export async function GET(request: Request) {
         },
       }
     )
-    await supabase.auth.exchangeCodeForSession(code)
+    
+    const { data, error } = await supabase.auth.exchangeCodeForSession(code)
+    
+    if (!error && data.user) {
+      // public.users 테이블에 사용자 프로필 생성 또는 업데이트
+      const { error: profileError } = await supabase
+        .from('users')
+        .upsert({
+          id: data.user.id,
+          email: data.user.email || '',
+          full_name: data.user.user_metadata?.full_name || data.user.user_metadata?.name || null,
+          avatar_url: data.user.user_metadata?.avatar_url || data.user.user_metadata?.picture || null,
+          updated_at: new Date().toISOString(),
+        }, {
+          onConflict: 'id'
+        })
+
+      if (profileError) {
+        console.error('Error creating user profile:', profileError)
+      }
+    }
   }
 
   return NextResponse.redirect(requestUrl.origin)

@@ -18,6 +18,8 @@ Supabase Auth (Google OAuth)
 
 Supabase (PostgreSQL)
 
+- [데이터베이스 스키마](./DATABASE.md) - 테이블 구조 및 스키마 상세
+
 ### File Handling
 
 사용자 Google Drive 연동
