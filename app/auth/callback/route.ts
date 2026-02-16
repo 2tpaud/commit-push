@@ -28,8 +28,11 @@ export async function GET(request: Request) {
     
     const { data, error } = await supabase.auth.exchangeCodeForSession(code)
     
+    // 참고: public.users 테이블 프로필은 트리거로 자동 생성됩니다.
+    // 트리거가 설정되지 않은 경우에만 아래 코드가 필요합니다.
+    // 트리거 설정 방법: docs/DATABASE_SETUP.md 참고
     if (!error && data.user) {
-      // public.users 테이블에 사용자 프로필 생성 또는 업데이트
+      // 트리거가 없을 경우를 대비한 폴백 (RLS 정책 때문에 실패할 수 있음)
       const { error: profileError } = await supabase
         .from('users')
         .upsert({
@@ -43,7 +46,7 @@ export async function GET(request: Request) {
         })
 
       if (profileError) {
-        console.error('Error creating user profile:', profileError)
+        console.warn('User profile creation failed (trigger should handle this):', profileError)
       }
     }
   }

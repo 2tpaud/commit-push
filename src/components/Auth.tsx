@@ -1,12 +1,17 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { supabase } from '../lib/supabaseClient'
 import type { User } from '@supabase/supabase-js'
+import NewNoteDialog from './NewNoteDialog'
+import { Button } from './ui/button'
 
 export default function Auth() {
+  const router = useRouter()
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
+  const [showNewNoteDialog, setShowNewNoteDialog] = useState(false)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -44,24 +49,25 @@ export default function Auth() {
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <div className="text-lg text-zinc-600">Loading...</div>
+        <div className="text-lg text-muted-foreground">Loading...</div>
       </div>
     )
   }
 
   if (!user) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-zinc-50 dark:bg-black">
-        <div className="flex flex-col items-center gap-6 rounded-lg bg-white p-8 shadow-lg dark:bg-zinc-900">
-          <h1 className="text-2xl font-semibold text-black dark:text-zinc-50">
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-6 rounded-lg border bg-card p-8 shadow-lg">
+          <h1 className="text-2xl font-semibold text-card-foreground">
             CommitPush에 로그인
           </h1>
-          <p className="text-sm text-zinc-600 dark:text-zinc-400">
+          <p className="text-sm text-muted-foreground">
             계속하려면 Google 계정으로 로그인하세요
           </p>
-          <button
+          <Button
             onClick={handleGoogleLogin}
-            className="flex items-center gap-3 rounded-lg bg-white px-6 py-3 text-sm font-medium text-gray-700 shadow-md transition-colors hover:bg-gray-50 border border-gray-300"
+            variant="outline"
+            className="flex items-center gap-3"
           >
             <svg className="h-5 w-5" viewBox="0 0 24 24">
               <path
@@ -82,44 +88,65 @@ export default function Auth() {
               />
             </svg>
             Google로 로그인
-          </button>
+          </Button>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-zinc-50 dark:bg-black">
-      <header className="border-b border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+    <div className="flex min-h-screen flex-col bg-background">
+      <header className="border-b border-border bg-card">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4">
-          <h1 className="text-xl font-semibold text-black dark:text-zinc-50">
+          <h1 className="text-xl font-semibold text-card-foreground">
             CommitPush
           </h1>
           <div className="flex items-center gap-4">
-            <span className="text-sm text-zinc-600 dark:text-zinc-400">
+            <span className="text-sm text-muted-foreground">
               {user.email}
             </span>
-            <button
-              onClick={handleLogout}
-              className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-800 dark:bg-zinc-700 dark:hover:bg-zinc-600"
-            >
+            <Button onClick={handleLogout} variant="default">
               로그아웃
-            </button>
+            </Button>
           </div>
         </div>
       </header>
       <main className="flex-1">
         <div className="mx-auto max-w-7xl px-4 py-8">
-          <div className="rounded-lg bg-white p-8 shadow-sm dark:bg-zinc-900">
-            <h2 className="mb-4 text-2xl font-semibold text-black dark:text-zinc-50">
-              환영합니다!
+          <div className="mb-6 flex items-center justify-between">
+            <h2 className="text-2xl font-semibold text-foreground">
+              노트
             </h2>
-            <p className="text-zinc-600 dark:text-zinc-400">
+            <div className="flex gap-2">
+              <Button variant="default" asChild>
+                <a href="/activity">작업 로그</a>
+              </Button>
+              <Button variant="default" asChild>
+                <a href="/developer-notes">개발자 노트</a>
+              </Button>
+              <Button variant="default" onClick={() => setShowNewNoteDialog(true)}>
+                새 노트 생성
+              </Button>
+            </div>
+          </div>
+          <div className="rounded-lg border bg-card p-8 shadow-sm">
+            <h3 className="mb-4 text-xl font-semibold text-card-foreground">
+              환영합니다!
+            </h3>
+            <p className="text-muted-foreground">
               {user.email}로 로그인되었습니다.
             </p>
           </div>
         </div>
       </main>
+
+      {user && (
+        <NewNoteDialog
+          user={user}
+          isOpen={showNewNoteDialog}
+          onClose={() => setShowNewNoteDialog(false)}
+        />
+      )}
     </div>
   )
 }

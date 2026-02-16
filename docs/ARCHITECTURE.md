@@ -10,6 +10,8 @@ TypeScript
 
 TailwindCSS
 
+shadcn/ui
+
 ### Authentication
 
 Supabase Auth (Google OAuth)
