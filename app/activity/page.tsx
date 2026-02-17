@@ -701,7 +701,7 @@ export default function ActivityPage() {
               </AlertDialogHeader>
               <AlertDialogFooter>
                 <AlertDialogCancel onClick={handleDeleteCancel}>취소</AlertDialogCancel>
-                <AlertDialogAction onClick={handleDeleteConfirm} className="bg-black text-white hover:bg-black/90">
+                <AlertDialogAction onClick={handleDeleteConfirm} className="bg-[#1F2A44] text-white hover:bg-[#1F2A44]/90">
                   삭제
                 </AlertDialogAction>
               </AlertDialogFooter>

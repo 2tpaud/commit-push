@@ -1,5 +1,6 @@
 'use client'
 
+import Image from 'next/image'
 import Link from 'next/link'
 import type { User } from '@supabase/supabase-js'
 import AppSidebar from './AppSidebar'
@@ -30,8 +31,19 @@ export default function SharedAppLayout({ user, children }: SharedAppLayoutProps
                 <div className="flex items-center gap-2">
                   <SidebarTrigger />
                   <h1 className="text-xl font-semibold text-card-foreground">
-                    <Link href="/" className="hover:opacity-80 transition-opacity">
-                      CommitPush
+                    <Link
+                      href="/"
+                      className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+                    >
+                      <Image
+                        src="/commitpush-logo.png"
+                        alt="CommitPush"
+                        width={42}
+                        height={42}
+                        className="h-[42px] w-[42px]"
+                        priority
+                      />
+                      <span style={{ color: '#1F2A44' }}>CommitPush</span>
                     </Link>
                   </h1>
                 </div>

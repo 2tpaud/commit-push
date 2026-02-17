@@ -5,24 +5,24 @@
 @layer base {
   :root {
     --background: 0 0% 100%;
-    --foreground: 0 0% 0%;
+    --foreground: 222 37% 19%;
     --card: 0 0% 100%;
-    --card-foreground: 0 0% 0%;
+    --card-foreground: 222 37% 19%;
     --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 0%;
-    --primary: 0 0% 0%;
+    --popover-foreground: 222 37% 19%;
+    --primary: 222 37% 19%;
     --primary-foreground: 0 0% 100%;
     --secondary: 0 0% 96%;
-    --secondary-foreground: 0 0% 0%;
+    --secondary-foreground: 222 37% 19%;
     --muted: 0 0% 96%;
     --muted-foreground: 0 0% 45%;
     --accent: 0 0% 96%;
-    --accent-foreground: 0 0% 0%;
+    --accent-foreground: 222 37% 19%;
     --destructive: 0 0% 0%;
     --destructive-foreground: 0 0% 100%;
     --border: 0 0% 90%;
     --input: 0 0% 90%;
-    --ring: 0 0% 0%;
+    --ring: 222 37% 19%;
     --radius: 0.5rem;
   }
 
@@ -62,13 +62,15 @@
 
 /* 탭: 선택된 탭만 흰색 배경 + 그림자 (연한 회색 바 위에 흰색 pill) */
 @layer components {
-  .tabs-trigger[data-state="active"] {
+  .tabs-trigger[data-state="active"],
+  button.tabs-trigger[data-state="active"] {
     background-color: white !important;
     font-weight: 600 !important;
-    color: hsl(0 0% 0%) !important;
+    color: #1F2A44 !important;
     box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.08) !important;
   }
-  .dark .tabs-trigger[data-state="active"] {
+  .dark .tabs-trigger[data-state="active"],
+  .dark button.tabs-trigger[data-state="active"] {
     background-color: hsl(0 0% 10%) !important;
     color: hsl(0 0% 100%) !important;
   }

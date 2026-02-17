@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
@@ -16,7 +16,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible'
-import { ChevronRight, ChevronDown, FileText, Search, LayoutDashboard, ScrollText, BookOpen } from 'lucide-react'
+import { ChevronRight, ChevronDown, ChevronUp, FileText, Search, LayoutDashboard, ScrollText, BookOpen } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 type SidebarView = 'tree' | 'search' | 'dashboard'
@@ -62,6 +62,47 @@ export default function AppSidebar({ userId }: { userId: string }) {
   const [sidebarView, setSidebarView] = useState<SidebarView>('tree')
   const [searchMode, setSearchMode] = useState<SearchMode>('title')
   const [searchQuery, setSearchQuery] = useState('')
+  
+  // 최근 항목 영역 높이 비율 (0.0 ~ 1.0, 기본값 0.2 = 1/5)
+  // localStorage에서 저장된 값 불러오기
+  const [recentItemsRatio, setRecentItemsRatio] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('sidebarRecentItemsRatio')
+      if (saved) {
+        const ratio = parseFloat(saved)
+        // 유효한 범위인지 확인 (0.2 ~ 0.5)
+        if (!isNaN(ratio) && ratio >= 0.2 && ratio <= 0.5) {
+          return ratio
+        }
+      }
+    }
+    return 0.2
+  })
+  const isResizing = useRef(false)
+  const sidebarContentRef = useRef<HTMLDivElement>(null)
+  
+  // recentItemsRatio 변경 시 localStorage에 저장
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('sidebarRecentItemsRatio', recentItemsRatio.toString())
+    }
+  }, [recentItemsRatio])
+  
+  // 토글 핸들러: 작을 때는 최대로 확대, 클 때는 기본값(1/5)로 축소
+  const handleToggleRatio = useCallback(() => {
+    const defaultRatio = 0.2
+    const maxRatio = 0.5
+    
+    // 현재 비율이 기본값 이하이면 최대로 확대, 초과이면 기본값으로 축소
+    if (recentItemsRatio <= defaultRatio) {
+      setRecentItemsRatio(maxRatio)
+    } else {
+      setRecentItemsRatio(defaultRatio)
+    }
+  }, [recentItemsRatio])
+  
+  // 아이콘 결정: 작을 때는 위쪽 화살표, 클 때는 아래쪽 화살표
+  const isExpanded = recentItemsRatio > 0.2
 
   /** 작업 로그·개발자 노트 페이지 프리페치로 이동 시 버벅임 완화 */
   useEffect(() => {
@@ -113,13 +154,56 @@ export default function AppSidebar({ userId }: { userId: string }) {
       .slice(0, 20)
   }, [notes, searchQuery, searchMode])
 
+  // 리사이즈 핸들러
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizing.current || !sidebarContentRef.current) return
+      
+      const sidebarContent = sidebarContentRef.current
+      const rect = sidebarContent.getBoundingClientRect()
+      const totalHeight = rect.height
+      // 마우스 위치에서 사이드바 상단까지의 거리
+      const mouseY = e.clientY - rect.top
+      
+      // 최근 항목 영역의 높이 비율 계산 (하단에서 위로)
+      // 최소 20% (1/5), 최대 50%로 제한
+      const newRatio = Math.max(0.2, Math.min(0.5, (totalHeight - mouseY) / totalHeight))
+      setRecentItemsRatio(newRatio)
+    }
+
+    const handleMouseUp = () => {
+      if (isResizing.current) {
+        isResizing.current = false
+        document.body.style.cursor = ''
+        document.body.style.userSelect = ''
+      }
+    }
+
+    document.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('mouseup', handleMouseUp)
+    
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+    }
+  }, [])
+
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    isResizing.current = true
+    document.body.style.cursor = 'row-resize'
+    document.body.style.userSelect = 'none'
+  }, [])
+
   const iconButtonClass =
-    'flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-transparent text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+    'flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-transparent text-[#1F2A44] hover:bg-accent hover:text-[#1F2A44] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+
+  const mainRatio = 1 - recentItemsRatio
 
   return (
     <Sidebar>
       {/* p-0으로 상단 패딩 제거 → 아이콘 행이 헤더와 동일 높이·라인 정렬 */}
-      <SidebarContent className="flex flex-col min-h-0 p-0">
+      <SidebarContent ref={sidebarContentRef} className="flex flex-col min-h-0 p-0">
         {/* 뷰 전환: 홈 CommitPush 로고와 동일 선상(h-14) + 라인 정렬 */}
         <div className="flex h-14 shrink-0 items-center gap-1 border-b border-border px-2">
           <button
@@ -127,7 +211,7 @@ export default function AppSidebar({ userId }: { userId: string }) {
             onClick={() => setSidebarView('tree')}
             className={cn(
               iconButtonClass,
-              sidebarView === 'tree' && 'bg-accent text-accent-foreground'
+              sidebarView === 'tree' && 'bg-accent text-[#1F2A44]'
             )}
             title="노트 분류 트리"
             aria-label="노트 분류 트리"
@@ -139,7 +223,7 @@ export default function AppSidebar({ userId }: { userId: string }) {
             onClick={() => setSidebarView('search')}
             className={cn(
               iconButtonClass,
-              sidebarView === 'search' && 'bg-accent text-accent-foreground'
+              sidebarView === 'search' && 'bg-accent text-[#1F2A44]'
             )}
             title="제목·태그 검색"
             aria-label="제목·태그 검색"
@@ -151,7 +235,7 @@ export default function AppSidebar({ userId }: { userId: string }) {
             onClick={() => setSidebarView('dashboard')}
             className={cn(
               iconButtonClass,
-              sidebarView === 'dashboard' && 'bg-accent text-accent-foreground'
+              sidebarView === 'dashboard' && 'bg-accent text-[#1F2A44]'
             )}
             title="대시보드 메뉴"
             aria-label="대시보드 메뉴"
@@ -178,8 +262,11 @@ export default function AppSidebar({ userId }: { userId: string }) {
           </Link>
         </div>
 
-        {/* 메인 영역: 트리 / 검색 / 대시보드 (4/5 비율) */}
-        <div className="flex-[4] min-h-0 overflow-auto px-2">
+        {/* 메인 영역: 트리 / 검색 / 대시보드 */}
+        <div 
+          className="min-h-0 overflow-auto px-2"
+          style={{ flex: mainRatio }}
+        >
           {loading ? (
             <p className="px-2 py-4 text-xs text-muted-foreground">로딩 중...</p>
           ) : sidebarView === 'tree' ? (
@@ -187,7 +274,7 @@ export default function AppSidebar({ userId }: { userId: string }) {
               <p className="px-2 py-4 text-xs text-muted-foreground">노트가 없습니다.</p>
             ) : (
               <>
-                <p className="sticky top-0 z-10 bg-sidebar px-2 py-2 text-xs font-semibold text-foreground">
+                <p className="sticky top-0 z-10 bg-sidebar px-2 py-2 text-xs font-semibold text-[#1F2A44]">
                   워크 스페이스
                 </p>
                 <SidebarMenu className="gap-0.5">
@@ -202,7 +289,7 @@ export default function AppSidebar({ userId }: { userId: string }) {
                     <SidebarMenuItem key={largeKey}>
                       <Collapsible defaultOpen className="group/collapsible">
                         <CollapsibleTrigger asChild>
-                          <SidebarMenuButton className="w-full justify-between gap-0 px-2 py-1.5">
+                          <SidebarMenuButton className="w-full justify-between gap-0 px-2 py-1.5 text-[#1F2A44]">
                             <span className="flex min-w-0 flex-1 items-center gap-2 truncate">
                               <ChevronRight
                                 className="h-4 w-4 shrink-0 transition-transform group-data-[state=open]/collapsible:rotate-90"
@@ -229,8 +316,8 @@ export default function AppSidebar({ userId }: { userId: string }) {
                                       <button
                                         type="button"
                                         className={cn(
-                                          'flex w-full min-w-0 items-center gap-2 rounded-md px-2 py-1 text-left text-xs font-medium',
-                                          'hover:bg-accent hover:text-accent-foreground',
+                                          'flex w-full min-w-0 items-center gap-2 rounded-md px-2 py-1 text-left text-xs font-medium text-[#1F2A44]',
+                                          'hover:bg-accent hover:text-[#1F2A44]',
                                           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
                                         )}
                                       >
@@ -257,8 +344,8 @@ export default function AppSidebar({ userId }: { userId: string }) {
                                                   <button
                                                     type="button"
                                                     className={cn(
-                                                      'flex w-full min-w-0 items-center gap-2 rounded-md px-2 py-1 text-left text-xs',
-                                                      'hover:bg-accent hover:text-accent-foreground',
+                                                      'flex w-full min-w-0 items-center gap-2 rounded-md px-2 py-1 text-left text-xs text-[#1F2A44]',
+                                                      'hover:bg-accent hover:text-[#1F2A44]',
                                                       'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
                                                     )}
                                                   >
@@ -279,8 +366,8 @@ export default function AppSidebar({ userId }: { userId: string }) {
                                                         <Link
                                                           href={`/notes/${note.id}`}
                                                           className={cn(
-                                                            'flex min-w-0 items-center gap-2 rounded-md px-2 py-1 text-xs',
-                                                            'hover:bg-accent hover:text-accent-foreground',
+                                                            'flex min-w-0 items-center gap-2 rounded-md px-2 py-1 text-xs text-[#1F2A44]',
+                                                            'hover:bg-accent hover:text-[#1F2A44]',
                                                             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
                                                           )}
                                                         >
@@ -324,7 +411,7 @@ export default function AppSidebar({ userId }: { userId: string }) {
                   className={cn(
                     'rounded px-2 py-1 text-xs font-medium',
                     searchMode === 'title'
-                      ? 'bg-accent text-accent-foreground'
+                      ? 'bg-accent text-[#1F2A44]'
                       : 'text-muted-foreground hover:bg-accent/50'
                   )}
                 >
@@ -336,7 +423,7 @@ export default function AppSidebar({ userId }: { userId: string }) {
                   className={cn(
                     'rounded px-2 py-1 text-xs font-medium',
                     searchMode === 'tag'
-                      ? 'bg-accent text-accent-foreground'
+                      ? 'bg-accent text-[#1F2A44]'
                       : 'text-muted-foreground hover:bg-accent/50'
                   )}
                 >
@@ -355,7 +442,7 @@ export default function AppSidebar({ userId }: { userId: string }) {
                   <Link
                     key={note.id}
                     href={`/notes/${note.id}`}
-                    className="rounded-md px-2 py-1.5 text-xs hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="rounded-md px-2 py-1.5 text-xs text-[#1F2A44] hover:bg-accent hover:text-[#1F2A44] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     <span className="truncate block">{note.title}</span>
                   </Link>
@@ -372,11 +459,41 @@ export default function AppSidebar({ userId }: { userId: string }) {
           )}
         </div>
 
-        {/* 구분선 + 하단 1/5: 최근 항목 고정 라벨 + 최근 수정일 순 노트 제목, 스크롤 */}
-        <div className="flex-[1] flex min-h-0 flex-col border-t border-border px-2">
-          <p className="shrink-0 bg-sidebar py-2 text-xs font-semibold text-foreground">
-            최근 항목
-          </p>
+        {/* 리사이즈 핸들 */}
+        <div
+          className="relative shrink-0 cursor-row-resize border-t border-border bg-transparent transition-colors hover:bg-accent/50"
+          style={{ height: '4px' }}
+          onMouseDown={handleMouseDown}
+          role="separator"
+          aria-label="최근 항목 영역 크기 조정"
+          aria-orientation="vertical"
+        >
+          <div className="absolute inset-x-0 top-1/2 h-0.5 -translate-y-1/2 bg-border" />
+        </div>
+
+        {/* 하단: 최근 항목 고정 라벨 + 최근 수정일 순 노트 제목, 스크롤 */}
+        <div 
+          className="flex min-h-0 flex-col px-2"
+          style={{ flex: recentItemsRatio }}
+        >
+          <div className="shrink-0 flex items-center justify-between bg-sidebar py-2">
+            <p className="text-xs font-semibold text-[#1F2A44]">
+              최근 항목
+            </p>
+            <button
+              type="button"
+              onClick={handleToggleRatio}
+              className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-[#1F2A44] hover:bg-accent hover:text-[#1F2A44] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-colors"
+              title={isExpanded ? "최소 범위로 축소" : "최대 범위로 확대"}
+              aria-label={isExpanded ? "최근 항목 영역을 최소 범위로 축소" : "최근 항목 영역을 최대 범위로 확대"}
+            >
+              {isExpanded ? (
+                <ChevronDown className="h-3.5 w-3.5" />
+              ) : (
+                <ChevronUp className="h-3.5 w-3.5" />
+              )}
+            </button>
+          </div>
           <div className="overflow-y-auto flex-1 min-h-0 pb-2">
             {recentNotes.length === 0 ? (
               <p className="px-2 text-xs text-muted-foreground">최근 노트 없음</p>
@@ -386,7 +503,7 @@ export default function AppSidebar({ userId }: { userId: string }) {
                   <li key={note.id}>
                     <Link
                       href={`/notes/${note.id}`}
-                      className="block truncate rounded-md px-2 py-1 text-xs hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      className="block truncate rounded-md px-2 py-1 text-xs text-[#1F2A44] hover:bg-accent hover:text-[#1F2A44] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
                       {note.title}
                     </Link>

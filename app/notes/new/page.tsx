@@ -299,7 +299,7 @@ export default function NewNotePage() {
                       }
                     }}
                     placeholder="태그 입력 후 Enter"
-                    className="flex-1 rounded-lg border border-zinc-300 bg-white px-4 py-2 text-black focus:border-zinc-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-50"
+                    className="flex-1 rounded-lg border border-zinc-300 bg-white px-4 py-2 text-[#1F2A44] focus:border-zinc-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-50"
                   />
                   <button
                     type="button"
@@ -370,7 +370,7 @@ export default function NewNotePage() {
                   const selected = Array.from(e.target.selectedOptions, (option) => option.value)
                   setRelatedNoteIds(selected)
                 }}
-                className="w-full rounded-lg border border-zinc-300 bg-white px-4 py-2 text-black focus:border-zinc-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-50"
+                className="w-full rounded-lg border border-zinc-300 bg-white px-4 py-2 text-[#1F2A44] focus:border-zinc-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-50"
                 size={5}
               >
                 {existingNotes.map((note) => (

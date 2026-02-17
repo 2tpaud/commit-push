@@ -905,7 +905,7 @@ export default function NewNoteDialog({
                             }}
                             className={`w-full px-4 py-2 text-left text-sm hover:bg-gray-100 ${
                               index === selectedCategoryLargeIndex && selectedCategoryLargeIndex >= 0 && selectedCategoryLargeIndex < displayItems.length
-                                ? 'bg-black text-white'
+                                ? 'bg-[#1F2A44] text-white'
                                 : 'text-popover-foreground'
                             }`}
                           >
@@ -956,7 +956,7 @@ export default function NewNoteDialog({
                                 }}
                                 className={`w-full px-4 py-2 text-left text-sm hover:bg-gray-100 ${
                                   index === selectedCategoryMediumIndex && selectedCategoryMediumIndex >= 0 && selectedCategoryMediumIndex < displayItems.length
-                                    ? 'bg-black text-white'
+                                    ? 'bg-[#1F2A44] text-white'
                                     : 'text-popover-foreground'
                                 }`}
                               >
@@ -1014,7 +1014,7 @@ export default function NewNoteDialog({
                                 }}
                                 className={`w-full px-4 py-2 text-left text-sm hover:bg-gray-100 ${
                                   index === selectedCategorySmallIndex && selectedCategorySmallIndex >= 0 && selectedCategorySmallIndex < displayItems.length
-                                    ? 'bg-black text-white'
+                                    ? 'bg-[#1F2A44] text-white'
                                     : 'text-popover-foreground'
                                 }`}
                               >
@@ -1060,7 +1060,7 @@ export default function NewNoteDialog({
                         }}
                         className={`w-full px-4 py-2 text-left text-sm hover:bg-gray-100 ${
                           index === selectedTagIndex && selectedTagIndex >= 0 && selectedTagIndex < displayItems.length
-                            ? 'bg-black text-white'
+                            ? 'bg-[#1F2A44] text-white'
                             : 'text-popover-foreground'
                         }`}
                       >
@@ -1129,7 +1129,7 @@ export default function NewNoteDialog({
                         }}
                         className={`w-full px-4 py-2 text-left text-sm hover:bg-gray-100 ${
                           index === selectedNoteIndex && selectedNoteIndex >= 0 && selectedNoteIndex < displayItems.length
-                            ? 'bg-black text-white'
+                            ? 'bg-[#1F2A44] text-white'
                             : 'text-popover-foreground'
                         }`}
                       >

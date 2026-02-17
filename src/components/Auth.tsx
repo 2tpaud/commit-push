@@ -103,7 +103,7 @@ export default function Auth() {
     <SharedAppLayout user={user}>
       <div className="mx-auto max-w-7xl px-4 py-8">
         <div className="mb-6 flex items-center justify-between">
-          <h2 className="text-2xl font-semibold text-foreground">
+          <h2 className="text-2xl font-semibold text-[#1F2A44]">
             노트
           </h2>
           <div className="flex gap-2">
@@ -116,10 +116,10 @@ export default function Auth() {
           </div>
         </div>
         <div className="rounded-lg border bg-card p-8 shadow-sm">
-          <h3 className="mb-4 text-xl font-semibold text-card-foreground">
+          <h3 className="mb-4 text-xl font-semibold text-[#1F2A44]">
             환영합니다!
           </h3>
-          <p className="text-muted-foreground">
+          <p className="text-[#1F2A44]">
             {user.email}로 로그인되었습니다.
           </p>
         </div>
