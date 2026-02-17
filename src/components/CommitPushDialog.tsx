@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import type { User } from '@supabase/supabase-js'
 import NoteSelectDialog from './NoteSelectDialog'
+import { DialogFormSkeleton } from './PageLoadingSkeleton'
+import { useSkeletonTiming } from '@/hooks/useSkeletonTiming'
 import {
   Dialog,
   DialogContent,
@@ -50,6 +52,7 @@ export default function CommitPushDialog({
   const [submitting, setSubmitting] = useState(false)
   const [showNoteSearchDialog, setShowNoteSearchDialog] = useState(false)
   const [loadingCommit, setLoadingCommit] = useState(false)
+  const showSkeleton = useSkeletonTiming(loadingCommit, { delayBeforeShow: 100, minShowMs: 280 })
 
   const toDatetimeLocal = (iso: string) => {
     const d = new Date(iso)
@@ -253,10 +256,11 @@ export default function CommitPushDialog({
           <DialogHeader>
             <DialogTitle>{commitId ? '커밋푸시 수정' : '커밋푸시'}</DialogTitle>
           </DialogHeader>
-          {loadingCommit ? (
-            <div className="py-8 text-center text-muted-foreground">로딩 중...</div>
+          {showSkeleton ? (
+            <DialogFormSkeleton />
+          ) : loadingCommit ? (
+            <div className="min-h-[200px]" aria-hidden />
           ) : (
-
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* 노트 선택 - 연관 노트 검색과 동일(검색 버튼 → 다이얼로그, 단일 선택) */}
             <div>

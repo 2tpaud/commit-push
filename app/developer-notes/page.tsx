@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import type { User } from '@supabase/supabase-js'
+import { TablePageLoadingSkeleton } from '@/components/PageLoadingSkeleton'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -12,6 +13,16 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import {
@@ -23,6 +34,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Trash2, Edit, Plus, FileText } from 'lucide-react'
+import SharedAppLayout from '@/components/SharedAppLayout'
 
 interface DeveloperNote {
   id: string
@@ -42,6 +54,8 @@ export default function DeveloperNotesPage() {
   const [viewingNote, setViewingNote] = useState<DeveloperNote | null>(null)
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null)
   const [deletingNoteId, setDeletingNoteId] = useState<string | null>(null)
+  const [deleteAlertOpen, setDeleteAlertOpen] = useState(false)
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
   const [title, setTitle] = useState('')
   const [content, setContent] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -53,8 +67,7 @@ export default function DeveloperNotesPage() {
         return
       }
       setUser(session.user)
-      setLoading(false)
-      loadNotes(session.user.id)
+      loadNotes(session.user.id).finally(() => setLoading(false))
     })
   }, [router])
 
@@ -94,11 +107,16 @@ export default function DeveloperNotesPage() {
     setShowDialog(true)
   }
 
-  const handleDelete = async (noteId: string) => {
-    if (!confirm('이 개발자 노트를 삭제하시겠습니까?')) {
-      return
-    }
+  const openDeleteAlert = (noteId: string) => {
+    setPendingDeleteId(noteId)
+    setDeleteAlertOpen(true)
+  }
 
+  const handleDeleteConfirm = async () => {
+    if (!pendingDeleteId) return
+    const noteId = pendingDeleteId
+    setPendingDeleteId(null)
+    setDeleteAlertOpen(false)
     setDeletingNoteId(noteId)
 
     const { error } = await supabase
@@ -115,6 +133,11 @@ export default function DeveloperNotesPage() {
 
     setNotes(notes.filter((note) => note.id !== noteId))
     setDeletingNoteId(null)
+  }
+
+  const handleDeleteCancel = () => {
+    setPendingDeleteId(null)
+    setDeleteAlertOpen(false)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -194,11 +217,7 @@ export default function DeveloperNotesPage() {
   }
 
   if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="text-lg text-muted-foreground">Loading...</div>
-      </div>
-    )
+    return <TablePageLoadingSkeleton tabCount={1} />
   }
 
   if (!user) {
@@ -206,25 +225,8 @@ export default function DeveloperNotesPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-background">
-      <header className="border-b border-border bg-card">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4">
-          <h1 className="text-xl font-semibold text-card-foreground">
-            CommitPush
-          </h1>
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-muted-foreground">
-              {user.email}
-            </span>
-            <Button variant="default" onClick={() => router.push('/')}>
-              홈으로
-            </Button>
-          </div>
-        </div>
-      </header>
-
-      <main className="flex-1">
-        <div className="mx-auto max-w-7xl px-4 py-8">
+    <SharedAppLayout user={user}>
+      <div className="mx-auto max-w-7xl px-4 py-8">
           <div className="mb-6 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <FileText className="h-6 w-6 text-foreground" />
@@ -291,7 +293,7 @@ export default function DeveloperNotesPage() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            onClick={() => handleDelete(note.id)}
+                            onClick={() => openDeleteAlert(note.id)}
                             disabled={deletingNoteId === note.id}
                             title="노트 삭제"
                           >
@@ -327,8 +329,7 @@ export default function DeveloperNotesPage() {
               </Table>
             </div>
           )}
-        </div>
-      </main>
+      </div>
 
       {/* 작성/수정 다이얼로그 */}
       <Dialog open={showDialog} onOpenChange={handleClose}>
@@ -439,6 +440,23 @@ export default function DeveloperNotesPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+
+      <AlertDialog open={deleteAlertOpen} onOpenChange={(open) => !open && handleDeleteCancel()}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>개발자 노트 삭제</AlertDialogTitle>
+            <AlertDialogDescription>
+              이 개발자 노트를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={handleDeleteCancel}>취소</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteConfirm} className="bg-black text-white hover:bg-black/90">
+              삭제
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </SharedAppLayout>
   )
 }

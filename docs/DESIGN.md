@@ -1,5 +1,36 @@
 # CommitPush 디자인 가이드
 
+## 레이아웃 및 네비게이션
+
+### 공통 레이아웃 (SharedAppLayout)
+- **위치**: `src/components/SharedAppLayout.tsx`
+- **역할**: 로그인 후 모든 인증 페이지에서 동일한 사이드바 + 헤더 유지
+- **구성**:
+  - **헤더** (`h-14`, `border-b border-border bg-card`): SidebarTrigger, CommitPush 로고(클릭 시 홈 `/` 이동), 이메일, 로그아웃 버튼
+  - **메인**: `children`으로 페이지별 콘텐츠
+- **사용 페이지**: 홈(`/`, Auth), 작업 로그(`/activity`), 개발자 노트(`/developer-notes`), 새 노트(`/notes/new`)
+
+### 사이드바 (AppSidebar)
+- **위치**: `src/components/AppSidebar.tsx`
+- **UI 컴포넌트**: `src/components/ui/sidebar.tsx` (Sidebar, SidebarContent, SidebarTrigger), `src/components/ui/collapsible.tsx`
+- **상단 아이콘 행** (헤더 CommitPush와 동일 선상 `h-14`, `border-b`):
+  - **FileText**: 노트 분류 트리 뷰
+  - **Search**: 제목·태그 검색 뷰
+  - **LayoutDashboard**: 대시보드 메뉴(준비 중)
+  - **ScrollText**: 작업 로그 (`/activity`) 링크, `prefetch` 적용
+  - **BookOpen**: 개발자 노트 (`/developer-notes`) 링크, `prefetch` 적용
+- **메인 영역** (비율 4/5):
+  - **파일 뷰**: 고정 라벨 "워크 스페이스" + 대분류 > 중분류 > 소분류 트리 (Collapsible, 노트 개수 표시)
+  - **검색 뷰**: 제목/태그 탭, 검색 입력, 자동완성 노트 제목 목록
+  - **대시보드 뷰**: 플레이스홀더 문구
+- **하단 영역** (비율 1/5): 구분선(`border-t`) + 고정 라벨 "최근 항목" + 최근 수정일 순 노트 제목 목록 (스크롤)
+- **정렬**: SidebarContent에 `p-0` 적용해 아이콘 행이 헤더와 높이·라인 정렬
+
+### 홈 화면 (Auth, 로그인 후)
+- SharedAppLayout 내부: 노트 제목, **커밋푸시**·**새 노트 생성** 버튼만 표시 (개발자 노트·작업 로그는 사이드바 아이콘으로 이동)
+
+---
+
 ## 폰트
 
 ### 기본 폰트
@@ -64,6 +95,10 @@ body {
 - `--border`: 0 0% 20% (어두운 회색)
 - `--input`: 0 0% 20% (어두운 회색)
 
+#### 사이드바 전용 (globals.css)
+- `--sidebar`, `--sidebar-foreground`, `--sidebar-primary`, `--sidebar-accent`, `--sidebar-border`, `--sidebar-ring` 등
+- 라이트: 밝은 배경·어두운 텍스트, 다크: 어두운 배경·밝은 텍스트
+
 기타 컴포넌트에서 사용하는 변수(`--popover`, `--accent`, `--accent-foreground`, `--ring`, `--radius`, `--destructive` 등)는 `app/globals.css` 참고. Tailwind는 `@import "tailwindcss"`로 로드.
 
 ## UI 컴포넌트 라이브러리
@@ -75,15 +110,15 @@ body {
 - 컴포넌트 위치: `src/components/ui/`
 
 ### 주요 사용 컴포넌트
-- Button
-- Dialog
-- Input
-- Textarea
-- Label
-- Badge
-- Checkbox
-- Tabs
-- Table
+- **Button**
+- **Dialog**
+- **Input**, **Textarea**, **Label**
+- **Badge**, **Checkbox**
+- **Tabs**, **Table**
+- **Skeleton** (로딩 플레이스홀더: `PageLoadingSkeleton`, `TablePageLoadingSkeleton`, `DialogTableSkeleton`, `DialogFormSkeleton` 활용)
+- **Sidebar** (SidebarProvider, Sidebar, SidebarContent, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarInset, SidebarTrigger) — 레이아웃·사이드바 트리
+- **Collapsible** (CollapsibleTrigger, CollapsibleContent) — 사이드바 대·중·소분류 펼침/접힘
+- **AlertDialog** — 삭제 확인 등
 
 ## 버튼 스타일
 
@@ -91,7 +126,7 @@ body {
 - 배경: 검정색 (`bg-black`)
 - 텍스트: 흰색 (`text-white`)
 - 호버: 검정색 90% 투명도 (`hover:bg-black/90`)
-- 사용 예: 로그아웃, 새 노트 추가, 커밋푸시, 작업 로그 탭·개발자 노트·홈으로 이동 등
+- 사용 예: 로그아웃, 새 노트 추가, 커밋푸시, 홈의 커밋푸시·새 노트 생성, 작업 로그/개발자 노트 페이지 내 액션 등
 
 ### 아웃라인 버튼 (variant="outline")
 - 배경: 투명
@@ -101,11 +136,12 @@ body {
 ### 고스트 버튼 (variant="ghost")
 - 배경: 없음
 - 호버: `bg-accent`
+- 사용 예: SidebarTrigger(사이드바 열기/닫기)
 
 ### 버튼 크기 (size)
 - `default`: h-9 px-4 py-2
 - `sm`, `lg`: 작은/큰 버튼
-- `icon`: h-9 w-9 (아이콘 전용, 예: 작업 로그의 새 노트 추가 `Plus` 버튼)
+- `icon`: h-9 w-9 (아이콘 전용, 예: 작업 로그의 새 노트·커밋푸시 추가 버튼)
 
 ## 다이얼로그 스타일
 
@@ -146,7 +182,7 @@ body {
 
 ## 탭(Tabs) 스타일
 
-- 활성 탭: `bg-background`, `text-foreground`, `shadow`
+- 활성 탭: `bg-background`, `text-foreground`, `shadow` (globals.css `.tabs-trigger[data-state="active"]`)
 - 비활성 탭: 기본 스타일
 - 호버: `hover:bg-accent`
 
@@ -230,3 +266,5 @@ body {
 7. **태그 표시**: 항상 Badge variant="outline" 사용, `#{tag}` 형식 유지
 8. **Data Table**: 작업 로그(노트/커밋푸시 탭), 연관 노트 검색, 노트 선택 다이얼로그, 개발자 노트는 shadcn Table + @tanstack/react-table 사용
 9. **카드뷰 레이아웃**: 카드 형태 UI가 필요할 때 위 카드뷰 스타일 참고
+10. **공통 레이아웃**: 인증된 페이지는 `SharedAppLayout`으로 감싸 사이드바·헤더 동일 유지. CommitPush 로고는 홈(`/`) 링크.
+11. **사이드바**: 상단 아이콘 행은 헤더와 `h-14`·`border-b` 정렬; 하단 "최근 항목" 영역은 전체의 1/5 비율.

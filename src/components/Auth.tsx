@@ -4,14 +4,18 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../lib/supabaseClient'
 import type { User } from '@supabase/supabase-js'
+import { useSkeletonTiming } from '@/hooks/useSkeletonTiming'
 import NewNoteDialog from './NewNoteDialog'
 import CommitPushDialog from './CommitPushDialog'
+import SharedAppLayout from './SharedAppLayout'
 import { Button } from './ui/button'
+import PageLoadingSkeleton from './PageLoadingSkeleton'
 
 export default function Auth() {
   const router = useRouter()
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
+  const showSkeleton = useSkeletonTiming(loading)
   const [showNewNoteDialog, setShowNewNoteDialog] = useState(false)
   const [showCommitPushDialog, setShowCommitPushDialog] = useState(false)
 
@@ -48,12 +52,11 @@ export default function Auth() {
     window.location.href = '/'
   }
 
+  if (showSkeleton) {
+    return <PageLoadingSkeleton />
+  }
   if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="text-lg text-muted-foreground">Loading...</div>
-      </div>
-    )
+    return null
   }
 
   if (!user) {
@@ -97,53 +100,30 @@ export default function Auth() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-background">
-      <header className="border-b border-border bg-card">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4">
-          <h1 className="text-xl font-semibold text-card-foreground">
-            CommitPush
-          </h1>
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-muted-foreground">
-              {user.email}
-            </span>
-            <Button onClick={handleLogout} variant="default">
-              로그아웃
+    <SharedAppLayout user={user}>
+      <div className="mx-auto max-w-7xl px-4 py-8">
+        <div className="mb-6 flex items-center justify-between">
+          <h2 className="text-2xl font-semibold text-foreground">
+            노트
+          </h2>
+          <div className="flex gap-2">
+            <Button variant="default" onClick={() => setShowCommitPushDialog(true)}>
+              커밋푸시
+            </Button>
+            <Button variant="default" onClick={() => setShowNewNoteDialog(true)}>
+              새 노트 생성
             </Button>
           </div>
         </div>
-      </header>
-      <main className="flex-1">
-        <div className="mx-auto max-w-7xl px-4 py-8">
-          <div className="mb-6 flex items-center justify-between">
-            <h2 className="text-2xl font-semibold text-foreground">
-              노트
-            </h2>
-            <div className="flex gap-2">
-              <Button variant="default" asChild>
-                <a href="/developer-notes">개발자 노트</a>
-              </Button>
-              <Button variant="default" asChild>
-                <a href="/activity">작업 로그</a>
-              </Button>
-              <Button variant="default" onClick={() => setShowCommitPushDialog(true)}>
-                커밋푸시
-              </Button>
-              <Button variant="default" onClick={() => setShowNewNoteDialog(true)}>
-                새 노트 생성
-              </Button>
-            </div>
-          </div>
-          <div className="rounded-lg border bg-card p-8 shadow-sm">
-            <h3 className="mb-4 text-xl font-semibold text-card-foreground">
-              환영합니다!
-            </h3>
-            <p className="text-muted-foreground">
-              {user.email}로 로그인되었습니다.
-            </p>
-          </div>
+        <div className="rounded-lg border bg-card p-8 shadow-sm">
+          <h3 className="mb-4 text-xl font-semibold text-card-foreground">
+            환영합니다!
+          </h3>
+          <p className="text-muted-foreground">
+            {user.email}로 로그인되었습니다.
+          </p>
         </div>
-      </main>
+      </div>
 
       {user && (
         <>
@@ -159,6 +139,6 @@ export default function Auth() {
           />
         </>
       )}
-    </div>
+    </SharedAppLayout>
   )
 }

@@ -25,6 +25,8 @@ import { Input } from './ui/input'
 import { Label } from './ui/label'
 import { Checkbox } from './ui/checkbox'
 import { Badge } from './ui/badge'
+import { DialogTableSkeleton } from './PageLoadingSkeleton'
+import { useSkeletonTiming } from '@/hooks/useSkeletonTiming'
 import {
   Table,
   TableBody,
@@ -76,6 +78,7 @@ export default function RelatedNoteSearchDialog({
   const [titleSearch, setTitleSearch] = useState('')
   const [tagSearch, setTagSearch] = useState('')
   const [sorting, setSorting] = useState<SortingState>([])
+  const showSkeleton = useSkeletonTiming(loading, { delayBeforeShow: 100, minShowMs: 280 })
 
   // 노트 로드
   useEffect(() => {
@@ -375,9 +378,9 @@ export default function RelatedNoteSearchDialog({
               setTagSearch('')
             }}
           >
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="title">제목으로 검색</TabsTrigger>
-              <TabsTrigger value="tag">태그로 검색</TabsTrigger>
+            <TabsList className="grid w-full grid-cols-2 gap-0 px-1 pt-1 pb-2">
+              <TabsTrigger value="title" className="h-full py-2">제목으로 검색</TabsTrigger>
+              <TabsTrigger value="tag" className="h-full py-2">태그로 검색</TabsTrigger>
             </TabsList>
             <TabsContent value="title" className="mt-4">
               <Label>제목으로 검색</Label>
@@ -404,10 +407,10 @@ export default function RelatedNoteSearchDialog({
 
         {/* Notes Table */}
         <div className="flex-1 overflow-y-auto p-6">
-          {loading ? (
-            <div className="py-8 text-center text-muted-foreground">
-              로딩 중...
-            </div>
+          {showSkeleton ? (
+            <DialogTableSkeleton />
+          ) : loading ? (
+            <div className="min-h-[200px] p-6" aria-hidden />
           ) : filteredNotes.length === 0 ? (
             <div className="py-8 text-center text-muted-foreground">
               {(titleSearch.trim() || tagSearch.trim())

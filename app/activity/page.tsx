@@ -15,6 +15,8 @@ import { supabase } from '@/lib/supabaseClient'
 import type { User } from '@supabase/supabase-js'
 import NewNoteDialog from '@/components/NewNoteDialog'
 import CommitPushDialog from '@/components/CommitPushDialog'
+import { TablePageLoadingSkeleton } from '@/components/PageLoadingSkeleton'
+import { useSkeletonTiming } from '@/hooks/useSkeletonTiming'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
@@ -26,7 +28,18 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { Trash2, Edit, Plus, ArrowUpDown } from 'lucide-react'
+import SharedAppLayout from '@/components/SharedAppLayout'
 
 interface Note {
   id: string
@@ -70,6 +83,9 @@ export default function ActivityPage() {
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null)
   const [sorting, setSorting] = useState<SortingState>([{ id: 'updated_at', desc: true }])
   const [commitSort, setCommitSort] = useState<{ key: CommitSortKey; asc: boolean }>({ key: 'updated_at', asc: false })
+  const showSkeleton = useSkeletonTiming(loading)
+  const [deleteAlertOpen, setDeleteAlertOpen] = useState(false)
+  const [pendingDelete, setPendingDelete] = useState<{ type: 'note' | 'commit'; id: string } | null>(null)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -78,9 +94,10 @@ export default function ActivityPage() {
         return
       }
       setUser(session.user)
-      setLoading(false)
-      loadNotes(session.user.id)
-      loadCommits(session.user.id)
+      Promise.all([
+        loadNotes(session.user.id),
+        loadCommits(session.user.id),
+      ]).finally(() => setLoading(false))
     })
   }, [router])
 
@@ -152,40 +169,50 @@ export default function ActivityPage() {
     setCommitSort((prev) => (prev?.key === key ? { key, asc: !prev.asc } : { key, asc: true }))
   }
 
-  const handleDeleteNote = async (noteId: string) => {
-    if (!confirm('이 노트를 삭제하시겠습니까?')) {
-      return
-    }
-
-    setDeletingNoteId(noteId)
-
-    const { error } = await supabase.from('notes').delete().eq('id', noteId)
-
-    if (error) {
-      console.error('Error deleting note:', error)
-      alert('노트 삭제에 실패했습니다.')
-      setDeletingNoteId(null)
-      return
-    }
-
-    setNotes(notes.filter((note) => note.id !== noteId))
-    setDeletingNoteId(null)
+  const openDeleteNoteAlert = (noteId: string) => {
+    setPendingDelete({ type: 'note', id: noteId })
+    setDeleteAlertOpen(true)
   }
 
-  const handleDeleteCommit = async (commitId: string) => {
-    if (!confirm('이 커밋을 삭제하시겠습니까?')) {
-      return
-    }
-    setDeletingCommitId(commitId)
-    const { error } = await supabase.from('commits').delete().eq('id', commitId)
-    if (error) {
-      console.error('Error deleting commit:', error)
-      alert('커밋 삭제에 실패했습니다.')
+  const openDeleteCommitAlert = (commitId: string) => {
+    setPendingDelete({ type: 'commit', id: commitId })
+    setDeleteAlertOpen(true)
+  }
+
+  const handleDeleteConfirm = async () => {
+    if (!pendingDelete) return
+    const { type, id } = pendingDelete
+    setPendingDelete(null)
+    setDeleteAlertOpen(false)
+
+    if (type === 'note') {
+      setDeletingNoteId(id)
+      const { error } = await supabase.from('notes').delete().eq('id', id)
+      if (error) {
+        console.error('Error deleting note:', error)
+        alert('노트 삭제에 실패했습니다.')
+        setDeletingNoteId(null)
+        return
+      }
+      setNotes(notes.filter((note) => note.id !== id))
+      setDeletingNoteId(null)
+    } else {
+      setDeletingCommitId(id)
+      const { error } = await supabase.from('commits').delete().eq('id', id)
+      if (error) {
+        console.error('Error deleting commit:', error)
+        alert('커밋 삭제에 실패했습니다.')
+        setDeletingCommitId(null)
+        return
+      }
+      setCommits((prev) => prev.filter((c) => c.id !== id))
       setDeletingCommitId(null)
-      return
     }
-    setCommits((prev) => prev.filter((c) => c.id !== commitId))
-    setDeletingCommitId(null)
+  }
+
+  const handleDeleteCancel = () => {
+    setPendingDelete(null)
+    setDeleteAlertOpen(false)
   }
 
   const columns = useMemo<ColumnDef<Note>[]>(
@@ -334,7 +361,7 @@ export default function ActivityPage() {
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={() => handleDeleteNote(note.id)}
+                onClick={() => openDeleteNoteAlert(note.id)}
                 disabled={deletingNoteId === note.id}
                 title="노트 삭제"
               >
@@ -382,12 +409,11 @@ export default function ActivityPage() {
     },
   })
 
+  if (showSkeleton) {
+    return <TablePageLoadingSkeleton tabCount={2} />
+  }
   if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="text-lg text-muted-foreground">Loading...</div>
-      </div>
-    )
+    return null
   }
 
   if (!user) {
@@ -395,28 +421,11 @@ export default function ActivityPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-background">
-      <header className="border-b border-border bg-card">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4">
-          <h1 className="text-xl font-semibold text-card-foreground">
-            CommitPush
-          </h1>
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-muted-foreground">
-              {user.email}
-            </span>
-            <Button variant="default" onClick={() => router.push('/')}>
-              홈으로
-            </Button>
-          </div>
-        </div>
-      </header>
-
-      <main className="flex-1">
-        <div className="mx-auto max-w-7xl px-4 py-8">
-          <h2 className="mb-6 text-2xl font-semibold text-foreground">
-            작업 로그
-          </h2>
+    <SharedAppLayout user={user}>
+      <div className="mx-auto max-w-7xl px-4 py-8">
+        <h2 className="mb-6 text-2xl font-semibold text-foreground">
+          작업 로그
+        </h2>
 
           {/* 탭 */}
           <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabType)} className="mb-6">
@@ -623,7 +632,7 @@ export default function ActivityPage() {
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                onClick={() => handleDeleteCommit(commit.id)}
+                                onClick={() => openDeleteCommitAlert(commit.id)}
                                 disabled={deletingCommitId === commit.id}
                                 title="커밋 삭제"
                               >
@@ -639,8 +648,7 @@ export default function ActivityPage() {
               )}
             </TabsContent>
           </Tabs>
-        </div>
-      </main>
+      </div>
 
       {user && (
         <>
@@ -678,8 +686,29 @@ export default function ActivityPage() {
               setEditingNoteId(null)
             }}
           />
+
+          <AlertDialog open={deleteAlertOpen} onOpenChange={(open) => !open && handleDeleteCancel()}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>
+                  {pendingDelete?.type === 'note' ? '노트 삭제' : '커밋 삭제'}
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                  {pendingDelete?.type === 'note'
+                    ? '이 노트를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.'
+                    : '이 커밋을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.'}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel onClick={handleDeleteCancel}>취소</AlertDialogCancel>
+                <AlertDialogAction onClick={handleDeleteConfirm} className="bg-black text-white hover:bg-black/90">
+                  삭제
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </>
       )}
-    </div>
+    </SharedAppLayout>
   )
 }

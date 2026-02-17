@@ -15,6 +15,8 @@ import { Input } from './ui/input'
 import { Label } from './ui/label'
 import { Badge } from './ui/badge'
 import { Checkbox } from './ui/checkbox'
+import { DialogTableSkeleton } from './PageLoadingSkeleton'
+import { useSkeletonTiming } from '@/hooks/useSkeletonTiming'
 import {
   Table,
   TableBody,
@@ -57,6 +59,7 @@ export default function NoteSelectDialog({
   const [selectedId, setSelectedId] = useState<string | null>(null)
   type SortKey = 'category' | 'title' | 'created_at' | 'updated_at'
   const [sort, setSort] = useState<{ key: SortKey; asc: boolean } | null>(null)
+  const showSkeleton = useSkeletonTiming(loading, { delayBeforeShow: 100, minShowMs: 280 })
 
   useEffect(() => {
     if (isOpen && user) {
@@ -148,9 +151,9 @@ export default function NoteSelectDialog({
               setTagSearch('')
             }}
           >
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="title">제목으로 검색</TabsTrigger>
-              <TabsTrigger value="tag">태그로 검색</TabsTrigger>
+            <TabsList className="grid w-full grid-cols-2 gap-0 px-1 pt-1 pb-2">
+              <TabsTrigger value="title" className="h-full py-2">제목으로 검색</TabsTrigger>
+              <TabsTrigger value="tag" className="h-full py-2">태그로 검색</TabsTrigger>
             </TabsList>
             <TabsContent value="title" className="mt-4">
               <Label>제목으로 검색</Label>
@@ -177,10 +180,10 @@ export default function NoteSelectDialog({
 
         {/* 연관 노트 검색과 동일: 테이블 */}
         <div className="flex-1 overflow-y-auto p-6">
-          {loading ? (
-            <div className="py-8 text-center text-muted-foreground">
-              로딩 중...
-            </div>
+          {showSkeleton ? (
+            <DialogTableSkeleton />
+          ) : loading ? (
+            <div className="min-h-[200px] p-6" aria-hidden />
           ) : filteredNotes.length === 0 ? (
             <div className="py-8 text-center text-muted-foreground">
               {(titleSearch.trim() || tagSearch.trim())
