@@ -71,20 +71,22 @@ export default function AppSidebar({ userId }: { userId: string }) {
 
   useEffect(() => {
     let mounted = true
-    supabase
-      .from('notes')
-      .select('id, title, category_large, category_medium, category_small, tags, updated_at')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false })
-      .then(({ data, error }) => {
-        if (!mounted) return
-        if (error) {
-          console.error('Error loading notes for sidebar:', error)
-          return
-        }
+    void Promise.resolve(
+      supabase
+        .from('notes')
+        .select('id, title, category_large, category_medium, category_small, tags, updated_at')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+    ).then(({ data, error }) => {
+      if (!mounted) return
+      if (error) {
+        console.error('Error loading notes for sidebar:', error)
+      } else {
         setNotes((data as Note[]) ?? [])
-      })
-      .finally(() => mounted && setLoading(false))
+      }
+    }).finally(() => {
+      if (mounted) setLoading(false)
+    })
     return () => { mounted = false }
   }, [userId])
 
