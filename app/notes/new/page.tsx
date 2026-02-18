@@ -3,10 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
-import type { User } from '@supabase/supabase-js'
-import PageLoadingSkeleton from '@/components/PageLoadingSkeleton'
-import SharedAppLayout from '@/components/SharedAppLayout'
-import { useSkeletonTiming } from '@/hooks/useSkeletonTiming'
+import { useAuthUser } from '@/components/AuthUserProvider'
 
 interface Note {
   id: string
@@ -19,10 +16,9 @@ interface Note {
 
 export default function NewNotePage() {
   const router = useRouter()
-  const [user, setUser] = useState<User | null>(null)
+  const user = useAuthUser()
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
-  const showSkeleton = useSkeletonTiming(loading)
 
   // 폼 데이터
   const [title, setTitle] = useState('')
@@ -42,16 +38,18 @@ export default function NewNotePage() {
   const [allTags, setAllTags] = useState<string[]>([])
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!session) {
-        router.push('/')
-        return
-      }
-      setUser(session.user)
-      setLoading(false)
-      loadExistingData(session.user.id)
-    })
-  }, [router])
+    if (!user) return
+    let cancelled = false
+    const run = async () => {
+      setLoading(true)
+      await loadExistingData(user.id)
+      if (!cancelled) setLoading(false)
+    }
+    run()
+    return () => {
+      cancelled = true
+    }
+  }, [user?.id])
 
   const loadExistingData = async (userId: string) => {
     const { data, error } = await supabase
@@ -132,25 +130,19 @@ export default function NewNotePage() {
     router.push(`/notes/${data.id}`)
   }
 
-  if (showSkeleton) {
-    return <PageLoadingSkeleton />
-  }
-  if (loading) {
-    return null
-  }
-
-  if (!user) {
-    return null
-  }
+  if (!user) return null
 
   return (
-    <SharedAppLayout user={user}>
       <div className="mx-auto max-w-4xl px-4 py-8">
           <div className="mb-6">
             <h2 className="text-2xl font-semibold text-foreground">
               새 노트 생성
             </h2>
           </div>
+
+          {loading && (
+            <p className="mb-4 text-sm text-muted-foreground">불러오는 중...</p>
+          )}
 
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="rounded-lg border bg-card p-6 shadow-sm">
@@ -402,6 +394,5 @@ export default function NewNotePage() {
             </div>
           </form>
       </div>
-    </SharedAppLayout>
   )
 }

@@ -35,6 +35,39 @@
 ### 홈 화면 (Auth, 로그인 후)
 - SharedAppLayout 내부: 노트 제목, **커밋푸시**·**새 노트 생성** 버튼만 표시 (개발자 노트·작업 로그는 사이드바 아이콘으로 이동)
 
+### 노트 상세 페이지 (`/notes/[id]`)
+- **위치**: `app/notes/[id]/page.tsx`
+- **레이아웃**: 
+  - 동적 가운데 정렬: 사이드바와 커밋 내역 Sheet 상태에 따라 컨테이너가 사용 가능한 공간에서 가운데 정렬
+  - 최대 폭: `max-w-4xl` (896px)
+- **머리글 영역**:
+  - 카테고리: 좌측 정렬, `category_large > category_medium > category_small` 형식
+  - 최종 수정일: 우측 정렬
+  - 뒤로 가기 버튼: 연관 노트에서 이동한 경우에만 표시 (`?from=노트ID` 파라미터 기반)
+- **타이틀 영역**:
+  - 제목: 좌측 정렬, `text-3xl font-bold`
+  - 커밋 내역 아이콘: 우측 정렬, `MessageCircleMore` 아이콘, 커밋 개수 표시
+- **속성 섹션** (아이콘 + 속성명 + 값 형식):
+  - 생성일: `Calendar` 아이콘, `formatDateTime()` 형식
+  - tags: `Tag` 아이콘, Badge variant="outline"로 표시 (`#{tag}` 형식)
+  - 참고URL: `LinkIcon` 아이콘, 링크 형태로 표시
+  - 상태: 상태에 따라 아이콘 변경 (`active`: `CircleCheck`, `archived`: `Archive`, `completed`: `CheckCircle2`), 한글 표시 (활성화/보관/완료)
+  - 공유여부: `Globe`(공개) 또는 `Lock`(비공개) 아이콘, Switch 컴포넌트로 토글
+  - 공유URL: `is_public`이 `true`이고 `share_token`이 있을 때만 표시, 복사 버튼 포함
+- **커밋 내역 Sheet**:
+  - 위치: 우측 슬라이드 패널 (`Sheet` 컴포넌트)
+  - 트리거: 타이틀 우측의 커밋 내역 아이콘 클릭
+  - 상태 관리: `CommitSheetProvider`로 전역 상태 관리 (페이지 이동 시에도 열림 상태 유지)
+  - 기능:
+    - 정렬: `ArrowUp`/`ArrowDown` 아이콘으로 `created_at` 기준 오름/내림차순 정렬
+    - 커밋 카드: 날짜(좌측 상단, 볼드), 제목, 시간(우측 상단), 메시지
+    - 닫기: 커스텀 닫기 버튼 (외부 클릭/ESC로 닫히지 않음)
+- **설명**: `whitespace-pre-wrap`로 줄바꿈 유지
+- **연관 노트**:
+  - 제목: `GitBranch` 아이콘 + "연관 노트"
+  - 목록: 각 항목 앞에 `FileText` 아이콘, 링크 형태
+  - 이동 시: `?from=현재노트ID` 파라미터 추가하여 뒤로 가기 버튼 활성화
+
 ---
 
 ## 폰트
@@ -132,6 +165,8 @@ body {
 - **Dialog**
 - **Input**, **Textarea**, **Label**
 - **Badge**, **Checkbox**
+- **Switch** — 공유여부 토글 등
+- **Sheet** — 커밋 내역 슬라이드 패널
 - **Tabs**, **Table**
 - **Skeleton** (로딩 플레이스홀더: `PageLoadingSkeleton`, `TablePageLoadingSkeleton`, `DialogTableSkeleton`, `DialogFormSkeleton` 활용)
 - **Sidebar** (SidebarProvider, Sidebar, SidebarContent, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarInset, SidebarTrigger) — 레이아웃·사이드바 트리
@@ -197,6 +232,27 @@ body {
 - 테두리만 표시
 - 배경 없음
 - 사용 예: 태그 표시 (`#{tag}` 형식)
+
+## Switch 스타일
+
+### 기본 Switch
+- 높이: `h-5`
+- 너비: `w-10`
+- checked 상태: 시그니처 컬러 배경 (`bg-[#1F2A44]`)
+- unchecked 상태: 회색 배경 (`bg-gray-300` 다크모드: `bg-gray-600`)
+- thumb: 흰색 원형 (`bg-white`, `h-4 w-4`)
+- 사용 예: 노트 상세 페이지의 공유여부 토글
+
+## Sheet 스타일 (슬라이드 패널)
+
+### 커밋 내역 Sheet
+- 위치: 우측 슬라이드 (`side="right"`)
+- 너비: 데스크톱 `384px`, 모바일 `75vw`
+- 배경: `bg-white` (다크모드: `bg-black`)
+- 오버레이: 기본 Radix UI 오버레이 사용
+- 닫기 동작: 외부 클릭/ESC로 닫히지 않음 (`onInteractOutside`, `onEscapeKeyDown` preventDefault)
+- 헤더: 제목 + 정렬 버튼 + 닫기 버튼
+- 내용: 커밋 카드 목록 (스크롤 가능)
 
 ## 탭(Tabs) 스타일
 
@@ -266,6 +322,16 @@ body {
   - 태그: 좌측 정렬, Badge variant="outline", `#{tag}` 형식
   - 날짜: 우측 정렬, `text-xs text-muted-foreground`
 
+## 공유 기능
+
+### 공유 링크 생성
+- **조건**: `is_public`이 `true`로 설정될 때 자동 생성
+- **share_token**: 32자리 랜덤 문자열 (영문 대소문자 + 숫자)
+- **공유 URL 형식**: `${NEXT_PUBLIC_SHARE_DOMAIN}/notes/shared/${share_token}`
+- **환경 변수**: `.env.local`에 `NEXT_PUBLIC_SHARE_DOMAIN` 설정 (예: `http://commitpush.cloud`)
+- **표시 위치**: 노트 상세 페이지의 공유여부 속성 아래
+- **복사 기능**: 복사 버튼 클릭 시 클립보드에 복사, 성공 시 체크 아이콘 표시
+
 ## 디자인 원칙
 
 1. **미니멀리즘**: 불필요한 장식 제거
@@ -273,6 +339,7 @@ body {
 3. **가독성**: 충분한 대비와 간격 유지
 4. **접근성**: 키보드 네비게이션 및 포커스 상태 명확히 표시
 5. **반응형**: 모바일부터 데스크톱까지 지원
+6. **동적 레이아웃**: 사이드바와 Sheet 상태에 따라 컨테이너가 자동으로 가운데 정렬
 
 ## 향후 작업 시 참고사항
 
@@ -288,3 +355,8 @@ body {
 10. **공통 레이아웃**: 인증된 페이지는 `SharedAppLayout`으로 감싸 사이드바·헤더 동일 유지. CommitPush 로고는 홈(`/`) 링크.
 11. **사이드바**: 상단 아이콘 행은 헤더와 `h-14`·`border-b` 정렬; 하단 "최근 항목" 영역은 기본 1/5 비율이며 드래그로 조절 가능(최소 20%, 최대 50%), localStorage로 상태 유지.
 12. **탭 컬러**: 활성/비활성 탭 모두 시그니처 컬러(`#1F2A44`) 텍스트 사용.
+13. **노트 상세 페이지**: 속성 섹션은 아이콘 + 속성명 + 콜론 + 값 형식으로 일관되게 표시. 속성명은 고정 폭(`w-24`)으로 값이 같은 위치에 정렬.
+14. **커밋 내역 Sheet**: `CommitSheetProvider`로 전역 상태 관리하여 페이지 이동 시에도 열림 상태 유지. 외부 클릭/ESC로 닫히지 않도록 설정.
+15. **동적 가운데 정렬**: 사이드바와 커밋 내역 Sheet 상태에 따라 노트 컨테이너가 사용 가능한 공간에서 자동으로 가운데 정렬 (`useMemo`로 계산).
+16. **공유 기능**: `is_public`이 `true`일 때 `share_token` 자동 생성. 공유 URL은 환경 변수 `NEXT_PUBLIC_SHARE_DOMAIN` 사용.
+17. **아이콘 사용**: 속성별로 적절한 아이콘 사용 (Calendar, Tag, LinkIcon, CircleCheck/Archive/CheckCircle2, Globe/Lock, GitBranch, FileText 등).

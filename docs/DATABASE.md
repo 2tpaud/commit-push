@@ -230,10 +230,10 @@ comment on column public.notes.related_note_ids is
 '연관된 다른 노트들의 UUID 배열. (향후 relation 테이블로 분리 가능)';
 
 comment on column public.notes.share_token is
-'외부 공유 링크용 고유 토큰.';
+'외부 공유 링크용 고유 토큰. is_public이 true로 설정될 때 애플리케이션 레벨에서 자동 생성됨. 32자리 랜덤 문자열(영문 대소문자 + 숫자). 공유 URL 형식: {NEXT_PUBLIC_SHARE_DOMAIN}/notes/shared/{share_token}';
 
 comment on column public.notes.is_public is
-'노트 공개 여부. true이면 외부 접근 허용 가능.';
+'노트 공개 여부. true이면 외부 접근 허용 가능. true로 설정될 때 share_token이 없으면 자동 생성됨. false로 변경되면 share_token이 null로 설정됨.';
 
 comment on column public.notes.commit_count is
 '해당 노트에 누적된 커밋 수. 성능 최적화용 캐시 필드.';

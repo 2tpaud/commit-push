@@ -27,3 +27,4 @@ bun dev
 - [제품 정의](./docs/PRODUCT.md) - 제품 정의, 기본 구조, 핵심 개념, 사용자 흐름, 제품 철학
 - [아키텍처](./docs/ARCHITECTURE.md) - 기술 스택 상세
 - [데이터베이스](./docs/DATABASE.md) - 데이터베이스 스키마 및 테이블 구조
+- [데이터베이스 설정](./docs/DATABASE_SETUP.md) - 트리거 설정 및 초기 설정 가이드
