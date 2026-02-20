@@ -9,15 +9,23 @@ import { useCommitSheet } from '@/components/CommitSheetProvider'
 import { useSidebar } from '@/components/ui/sidebar'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
-import { MessageCircleMore, X, Calendar, Tag, Link as LinkIcon, ArrowUpDown, ArrowUp, ArrowDown, CircleCheck, Archive, CheckCircle2, Globe, Lock, GitBranch, FileText, ArrowLeft, Copy, Check } from 'lucide-react'
+import { MessageCircleMore, X, Calendar, Tag, Link as LinkIcon, ArrowUp, ArrowDown, CircleCheck, Archive, CheckCircle2, Globe, Lock, GitBranch, FileText, ArrowLeft, Copy, Check } from 'lucide-react'
 import {
   Sheet,
   SheetContent,
   SheetHeader,
   SheetTitle,
   SheetTrigger,
-  SheetClose,
 } from '@/components/ui/sheet'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 
 interface Note {
   id: string
@@ -110,10 +118,11 @@ export default function NoteDetailPage() {
   const [commits, setCommits] = useState<Commit[]>([])
   const [relatedNotes, setRelatedNotes] = useState<RelatedNote[]>([])
   const [windowWidth, setWindowWidth] = useState(0)
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc') // 기본값: 최신순(내림차순)
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
   const [copied, setCopied] = useState(false)
+  const [userPlan, setUserPlan] = useState<string | null>(null)
+  const [proRequiredOpen, setProRequiredOpen] = useState(false)
 
-  // window 크기 추적
   useEffect(() => {
     if (typeof window === 'undefined') return
     setWindowWidth(window.innerWidth)
@@ -126,10 +135,19 @@ export default function NoteDetailPage() {
     return () => window.removeEventListener('resize', handleResize)
   }, [])
 
-  // 노트 ID가 바뀌면 현재 노트 ID 업데이트
   useEffect(() => {
     setCurrentNoteId(noteId)
   }, [noteId, setCurrentNoteId])
+
+  useEffect(() => {
+    if (!user?.id) return
+    supabase
+      .from('users')
+      .select('plan')
+      .eq('id', user.id)
+      .single()
+      .then(({ data }) => setUserPlan(data?.plan ?? 'free'))
+  }, [user?.id])
 
   useEffect(() => {
     if (!user || !noteId) return
@@ -137,8 +155,6 @@ export default function NoteDetailPage() {
     let cancelled = false
 
     const loadNote = async () => {
-      // note가 없을 때만 "빈 화면" 방지용 로딩 표시를 위해 null로 유지
-      // 노트 데이터 가져오기
       const { data: noteData, error: noteError } = await supabase
         .from('notes')
         .select('*')
@@ -153,10 +169,8 @@ export default function NoteDetailPage() {
         return
       }
 
-      // 데이터 업데이트 (깜빡임 없이)
       setNote(noteData as Note)
 
-      // 커밋/연관 노트는 병렬 로드 (페이지 전환 체감 개선)
       const relatedIds = (noteData as Note).related_note_ids
       const [commitsRes, relatedRes] = await Promise.all([
         supabase
@@ -190,7 +204,6 @@ export default function NoteDetailPage() {
     }
   }, [user?.id, noteId])
 
-  // Sheet가 열려있고 현재 노트가 바뀌면 커밋 내역 다시 로드
   useEffect(() => {
     if (!isOpen || !user || !noteId) return
 
@@ -220,7 +233,6 @@ export default function NoteDetailPage() {
     }
   }, [isOpen, user?.id, noteId])
 
-  // 현재 노트의 커밋 내역만 로드 (Sheet가 열려있을 때)
   useEffect(() => {
     if (!isOpen || !user || !currentNoteId || currentNoteId !== noteId) return
 
@@ -250,12 +262,8 @@ export default function NoteDetailPage() {
     }
   }, [isOpen, user?.id, currentNoteId, noteId])
 
-
-
-  // 컨테이너 스타일 계산 (사이드바와 Sheet 상태에 따라 사용 가능한 공간에서 가운데 정렬)
   const containerStyle = useMemo(() => {
     if (windowWidth === 0) {
-      // 초기 렌더링 시 기본값
       return {
         marginLeft: 'auto',
         marginRight: 'auto',
@@ -263,23 +271,14 @@ export default function NoteDetailPage() {
       }
     }
 
-    const sidebarWidth = isSidebarOpen ? 256 : 0 // 사이드바 폭 (w-64 또는 0)
-    const maxContentWidth = 896 // max-w-4xl
-    const sheetWidth = isOpen ? (windowWidth >= 640 ? 384 : windowWidth * 0.75) : 0 // Sheet 폭
+    const sidebarWidth = isSidebarOpen ? 256 : 0
+    const maxContentWidth = 896
+    const sheetWidth = isOpen ? (windowWidth >= 640 ? 384 : windowWidth * 0.75) : 0
     
-    // SidebarInset의 폭 = 전체 폭 - 사이드바 폭
     const sidebarInsetWidth = windowWidth - sidebarWidth
-    
-    // 사용 가능한 폭 = SidebarInset 폭 - Sheet 폭
     const availableWidth = sidebarInsetWidth - sheetWidth
-    
-    // 가운데 정렬을 위한 여백 계산
     const centerOffset = Math.max(0, (availableWidth - maxContentWidth) / 2)
-    
-    // marginLeft: SidebarInset 내에서 centerOffset만큼 왼쪽 여백
     const marginLeft = centerOffset
-    
-    // marginRight: Sheet가 열려있으면 sheetWidth + centerOffset, 닫혀있으면 centerOffset
     const marginRight = sheetWidth + centerOffset
     
     return {
@@ -289,7 +288,6 @@ export default function NoteDetailPage() {
     }
   }, [windowWidth, isSidebarOpen, isOpen])
 
-  // 정렬된 커밋 목록
   const sortedCommits = useMemo(() => {
     const sorted = [...commits].sort((a, b) => {
       const dateA = new Date(a.created_at).getTime()
@@ -317,11 +315,11 @@ export default function NoteDetailPage() {
   ].filter(Boolean)
 
   return (
-    <div 
+    <>
+    <div
       className="px-4 py-8 transition-all duration-300"
       style={containerStyle}
     >
-        {/* 뒤로 가기 버튼 */}
         {fromNoteId && (
           <div className="mb-4">
             <Link
@@ -334,7 +332,6 @@ export default function NoteDetailPage() {
           </div>
         )}
         
-        {/* 카테고리 영역 */}
         <div className="mb-4 flex items-start justify-between">
           <div className="text-left text-sm text-muted-foreground">
             {categoryParts.length > 0 ? (
@@ -348,20 +345,16 @@ export default function NoteDetailPage() {
           </div>
         </div>
 
-        {/* 타이틀 */}
         <div className="mb-4 flex items-center justify-between">
           <h1 className="text-left text-3xl font-bold text-[#1F2A44]">
             {note.title}
           </h1>
-          {/* 커밋 내역 Sheet */}
           <Sheet 
             open={isOpen} 
             onOpenChange={(open) => {
-              // 외부 클릭으로 닫히려는 시도는 무시하고, 명시적으로 열기만 허용
               if (open) {
                 openSheet()
               }
-              // 닫기는 닫기 버튼을 통해서만 가능하도록 함
             }}
             modal={false}
           >
@@ -386,14 +379,8 @@ export default function NoteDetailPage() {
             </SheetTrigger>
             <SheetContent 
               side="right"
-              onInteractOutside={(e) => {
-                // 외부 클릭 시 닫히지 않도록 방지
-                e.preventDefault()
-              }}
-              onEscapeKeyDown={(e) => {
-                // ESC 키로 닫히지 않도록 방지
-                e.preventDefault()
-              }}
+              onInteractOutside={(e) => e.preventDefault()}
+              onEscapeKeyDown={(e) => e.preventDefault()}
               className="[&>button]:hidden"
             >
               <SheetHeader>
@@ -459,7 +446,6 @@ export default function NoteDetailPage() {
           </Sheet>
         </div>
 
-        {/* 생성일 */}
         <div className="mb-3 flex items-center text-left text-sm">
           <div className="flex w-24 shrink-0 items-center gap-1.5 text-muted-foreground">
             <Calendar className="h-4 w-4" />
@@ -469,7 +455,6 @@ export default function NoteDetailPage() {
           <span className="text-foreground">{formatDateTime(note.created_at)}</span>
         </div>
 
-        {/* 태그 */}
         <div className="mb-3 flex items-start text-left text-sm">
           <div className="flex w-24 shrink-0 items-center gap-1.5 text-muted-foreground">
             <Tag className="h-4 w-4" />
@@ -489,7 +474,6 @@ export default function NoteDetailPage() {
           </div>
         </div>
 
-        {/* 참고URL */}
         <div className="mb-3 flex items-start text-left text-sm">
           <div className="flex w-24 shrink-0 items-center gap-1.5 text-muted-foreground">
             <LinkIcon className="h-4 w-4" />
@@ -515,7 +499,6 @@ export default function NoteDetailPage() {
           </div>
         </div>
 
-        {/* 상태 */}
         <div className="mb-3 flex items-center text-left text-sm">
           <div className="flex w-24 shrink-0 items-center gap-1.5 text-muted-foreground">
             {note.status === 'active' && <CircleCheck className="h-4 w-4" />}
@@ -528,7 +511,6 @@ export default function NoteDetailPage() {
           <span className="text-foreground">{formatStatus(note.status)}</span>
         </div>
 
-        {/* 공유여부 */}
         <div className="mb-3 flex items-center text-left text-sm">
           <div className="flex w-24 shrink-0 items-center gap-1.5 text-muted-foreground">
             {note.is_public ? (
@@ -543,29 +525,27 @@ export default function NoteDetailPage() {
             checked={note.is_public}
             onCheckedChange={async (checked) => {
               if (!user || !noteId) return
-              
-              // share_token 생성 (공개로 전환하고 토큰이 없을 때)
+              if (checked && (userPlan === 'free' || userPlan === null)) {
+                setProRequiredOpen(true)
+                return
+              }
               let shareToken = note.share_token
               if (checked && !shareToken) {
-                // 랜덤한 32자리 문자열 생성 (영문 대소문자 + 숫자)
                 const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
                 shareToken = Array.from(crypto.getRandomValues(new Uint8Array(32)))
                   .map(x => chars[x % chars.length])
                   .join('')
               } else if (!checked) {
-                // 비공개로 전환하면 share_token 제거
                 shareToken = null
               }
-              
               const { error } = await supabase
                 .from('notes')
-                .update({ 
+                .update({
                   is_public: checked,
                   share_token: shareToken
                 })
                 .eq('id', noteId)
                 .eq('user_id', user.id)
-              
               if (!error) {
                 setNote({ ...note, is_public: checked, share_token: shareToken })
               }
@@ -573,7 +553,6 @@ export default function NoteDetailPage() {
           />
         </div>
 
-        {/* 공유URL */}
         {note.is_public && note.share_token && (
           <div className="mb-3 flex items-center text-left text-sm">
             <div className="flex w-24 shrink-0 items-center gap-1.5 text-muted-foreground">
@@ -612,18 +591,14 @@ export default function NoteDetailPage() {
           </div>
         )}
 
-        {/* 가로선 */}
         <div className="my-6 border-t border-border"></div>
 
-        {/* 설명 */}
         <div className="mb-6 whitespace-pre-wrap text-left text-foreground">
           {note.description || ''}
         </div>
 
-        {/* 가로선 */}
         <div className="my-6 border-t border-border"></div>
 
-        {/* 연관 노트 */}
         <div className="mb-6">
           <div className="mb-3 flex items-center gap-2 text-left">
             <GitBranch className="h-5 w-5 text-muted-foreground" />
@@ -649,5 +624,34 @@ export default function NoteDetailPage() {
           )}
         </div>
     </div>
+
+      <AlertDialog open={proRequiredOpen} onOpenChange={setProRequiredOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Pro 플랜이 필요합니다</AlertDialogTitle>
+            <AlertDialogDescription>
+              노트 외부 공유는 Pro 플랜에서 이용할 수 있습니다.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction
+              onClick={() => setProRequiredOpen(false)}
+              className="bg-[#1F2A44] text-white hover:bg-[#1F2A44]/90"
+            >
+              확인
+            </AlertDialogAction>
+            <AlertDialogAction asChild>
+              <Link
+                href="/plan"
+                onClick={() => setProRequiredOpen(false)}
+                className="border border-input bg-background hover:bg-accent"
+              >
+                요금제 보기
+              </Link>
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   )
 }

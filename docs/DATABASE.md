@@ -1,5 +1,22 @@
 # CommitPush 데이터베이스 스키마
 
+## SQL 재실행 시 동작
+
+각 테이블의 SQL은 **이미 생성된 DB에서도 그대로 다시 실행해도 됩니다.** 재실행 시 에러가 나지 않도록 되어 있습니다.
+
+| 항목 | 없을 때 | 이미 있을 때 |
+|------|---------|----------------|
+| **테이블** (`create table if not exists`) | 새로 생성 | **그대로 둠** (기존 테이블·데이터 유지, 덮어쓰기 아님) |
+| **RLS 정책** (`drop policy if exists` 후 `create policy`) | 새로 생성 | 기존 정책 삭제 후 새 정책으로 **교체** |
+| **함수** (`create or replace function`) | 새로 생성 | 내용만 **덮어씀** |
+| **트리거** (`drop trigger if exists` 후 `create trigger`) | 새로 생성 | 기존 트리거 삭제 후 새 트리거로 **교체** |
+| **코멘트** (`comment on ...`) | 새로 생성 | **덮어씀** |
+| **인덱스** (`create index if not exists`) | 새로 생성 | 이미 있으면 **그대로 둠** (스킵) |
+
+요약: **테이블**은 없으면 생성, 있으면 건드리지 않음(데이터 유지). **정책·함수·트리거·코멘트**는 있으면 새 내용으로 갱신됨.
+
+---
+
 ## users 테이블
 
 ### 테이블 생성
@@ -56,7 +73,7 @@ using (auth.uid() = id)
 with check (auth.uid() = id);
 
 --------------------------------------------------
--- 🔎 컬럼 설명(Comment)
+-- 4. 컬럼 설명(Comment)
 --------------------------------------------------
 
 comment on table public.users is
@@ -87,10 +104,10 @@ comment on column public.users.plan_expires_at is
 '유료 플랜 만료 시점. 구독 관리용.';
 
 comment on column public.users.total_notes is
-'사용자가 생성한 총 노트 수. 성능 최적화를 위한 캐시 필드.';
+'사용자가 생성한 총 노트 수. 성능 최적화를 위한 캐시 필드. notes INSERT/DELETE 시 트리거로 갱신됨.';
 
 comment on column public.users.total_commits is
-'사용자가 생성한 총 커밋 수. 통계/대시보드 최적화용.';
+'사용자가 생성한 총 커밋 수. 통계/대시보드 최적화용. commits INSERT/DELETE 시 트리거로 갱신됨.';
 
 comment on column public.users.organization_id is
 '팀 기능 확장 대비 필드. 추후 organizations 테이블과 연결 가능.';
@@ -100,21 +117,71 @@ comment on column public.users.created_at is
 
 comment on column public.users.updated_at is
 '사용자 프로필 마지막 수정 시각.';
-```
 
-### 보안 정책
-
-- **Row Level Security (RLS)**: 활성화됨
-- **정책**: "Users can manage their own profile"
-  - 사용자는 자신의 프로필만 조회/수정/삭제 가능 (`auth.uid() = id`)
-
-### 자동 프로필 생성 트리거
-
-`auth.users`에 사용자가 생성될 때 자동으로 `public.users` 테이블에 프로필을 생성하는 트리거입니다.
-
-```sql
 --------------------------------------------------
--- 4. 신규 유저 자동 생성 함수
+-- 5. users.total_notes 갱신 함수
+--------------------------------------------------
+
+create or replace function public.update_users_note_count()
+returns trigger as $$
+begin
+  if tg_op = 'INSERT' then
+    update public.users
+    set total_notes = coalesce(total_notes, 0) + 1
+    where id = new.user_id;
+  elsif tg_op = 'DELETE' then
+    update public.users
+    set total_notes = greatest(coalesce(total_notes, 0) - 1, 0)
+    where id = old.user_id;
+  end if;
+  return coalesce(new, old);
+end;
+$$ language plpgsql security definer;
+
+--------------------------------------------------
+-- 6. users.total_commits 갱신 함수
+--------------------------------------------------
+
+create or replace function public.update_users_commit_count()
+returns trigger as $$
+begin
+  if tg_op = 'INSERT' then
+    update public.users
+    set total_commits = coalesce(total_commits, 0) + 1
+    where id = new.user_id;
+  elsif tg_op = 'DELETE' then
+    update public.users
+    set total_commits = greatest(coalesce(total_commits, 0) - 1, 0)
+    where id = old.user_id;
+  end if;
+  return coalesce(new, old);
+end;
+$$ language plpgsql security definer;
+
+--------------------------------------------------
+-- 7. users.total_notes 트리거 (notes 테이블 생성 후 실행)
+--------------------------------------------------
+
+drop trigger if exists trigger_update_users_note_count on public.notes;
+
+create trigger trigger_update_users_note_count
+after insert or delete on public.notes
+for each row
+execute function public.update_users_note_count();
+
+--------------------------------------------------
+-- 8. users.total_commits 트리거
+--------------------------------------------------
+
+drop trigger if exists trigger_update_users_commit_count on public.commits;
+
+create trigger trigger_update_users_commit_count
+after insert or delete on public.commits
+for each row
+execute function public.update_users_commit_count();
+
+--------------------------------------------------
+-- 9. 신규 유저 자동 생성 함수 (auth.users INSERT 시 프로필 생성)
 --------------------------------------------------
 
 create or replace function public.handle_new_user()
@@ -139,7 +206,7 @@ end;
 $$ language plpgsql security definer;
 
 --------------------------------------------------
--- 5. 트리거 설정
+-- 10. 트리거 설정 (auth.users INSERT 시 프로필 생성)
 --------------------------------------------------
 
 drop trigger if exists on_auth_user_created on auth.users;
@@ -150,7 +217,13 @@ create trigger on_auth_user_created
   execute procedure public.handle_new_user();
 ```
 
-트리거는 `security definer`로 실행되므로 RLS 정책을 우회합니다.
+**실행 순서**: 7·8번 트리거는 notes/commits 테이블 생성 후 실행한다. 9·10번은 `auth.users`에 가입 시 `public.users` 프로필을 자동 생성하며, `security definer`로 RLS를 우회한다.
+
+### 보안 정책
+
+- **Row Level Security (RLS)**: 활성화됨
+- **정책**: "Users can manage their own profile"
+  - 사용자는 자신의 프로필만 조회/수정/삭제 가능 (`auth.uid() = id`)
 
 ## notes 테이블
 
@@ -161,7 +234,7 @@ create trigger on_auth_user_created
 -- 1. NOTES TABLE 생성
 --------------------------------------------------
 
-create table public.notes (
+create table if not exists public.notes (
   id uuid primary key default gen_random_uuid(),
   user_id uuid references auth.users(id) on delete cascade,
 
@@ -288,6 +361,8 @@ on public.notes
 for all
 using (auth.uid() = user_id)
 with check (auth.uid() = user_id);
+
+-- users.total_notes 트리거는 users 테이블 섹션에서 이미 생성됨 (7번)
 ```
 
 ### 보안 정책
@@ -305,7 +380,7 @@ with check (auth.uid() = user_id);
 -- 1. DEVELOPER_NOTES TABLE 생성
 --------------------------------------------------
 
-create table public.developer_notes (
+create table if not exists public.developer_notes (
   id uuid primary key default gen_random_uuid(),
   user_id uuid references auth.users(id) on delete cascade,
 
@@ -386,7 +461,7 @@ with check (auth.uid() = user_id);
 -- 1. COMMITS TABLE 생성
 --------------------------------------------------
 
-create table public.commits (
+create table if not exists public.commits (
   id uuid primary key default gen_random_uuid(),
   user_id uuid references auth.users(id) on delete cascade,
   note_id uuid not null references public.notes(id) on delete cascade,
@@ -510,6 +585,8 @@ create trigger trigger_update_note_commit_stats
 after insert or delete on public.commits
 for each row
 execute function public.update_note_commit_stats();
+
+-- users.total_commits 트리거는 users 테이블 섹션에서 이미 생성됨 (8번)
 ```
 
 ### 보안 정책
@@ -517,3 +594,14 @@ execute function public.update_note_commit_stats();
 - **Row Level Security (RLS)**: 활성화됨
 - **정책**: "Users can manage own commits"
   - 사용자는 자신의 커밋만 조회/수정/삭제 가능 (`auth.uid() = user_id`)
+
+## users.total_notes / total_commits 기존 데이터 동기화
+
+트리거 적용 전에 이미 존재하는 notes/commits 건수로 `users` 캐시를 맞출 때 아래를 한 번만 실행한다.
+
+```sql
+update public.users u
+set
+  total_notes = (select count(*) from public.notes n where n.user_id = u.id),
+  total_commits = (select count(*) from public.commits c where c.user_id = u.id);
+```

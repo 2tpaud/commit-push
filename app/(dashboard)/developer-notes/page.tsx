@@ -1,10 +1,18 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect, useMemo } from 'react'
+import {
+  useReactTable,
+  getCoreRowModel,
+  getSortedRowModel,
+  getFilteredRowModel,
+  flexRender,
+  type ColumnDef,
+  type SortingState,
+} from '@tanstack/react-table'
 import { supabase } from '@/lib/supabaseClient'
-import type { User } from '@supabase/supabase-js'
 import { TablePageLoadingSkeleton } from '@/components/PageLoadingSkeleton'
+import { useSkeletonTiming } from '@/hooks/useSkeletonTiming'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -25,6 +33,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import {
   Table,
   TableBody,
@@ -33,8 +42,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { Trash2, Edit, Plus, FileText } from 'lucide-react'
-import SharedAppLayout from '@/components/SharedAppLayout'
+import { Trash2, Edit, Plus, ArrowUpDown } from 'lucide-react'
+import { useAuthUser } from '@/components/AuthUserProvider'
 
 interface DeveloperNote {
   id: string
@@ -45,9 +54,9 @@ interface DeveloperNote {
 }
 
 export default function DeveloperNotesPage() {
-  const router = useRouter()
-  const [user, setUser] = useState<User | null>(null)
+  const user = useAuthUser()
   const [loading, setLoading] = useState(true)
+  const showSkeleton = useSkeletonTiming(loading)
   const [notes, setNotes] = useState<DeveloperNote[]>([])
   const [showDialog, setShowDialog] = useState(false)
   const [showViewDialog, setShowViewDialog] = useState(false)
@@ -59,17 +68,12 @@ export default function DeveloperNotesPage() {
   const [title, setTitle] = useState('')
   const [content, setContent] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [sorting, setSorting] = useState<SortingState>([{ id: 'updated_at', desc: true }])
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!session) {
-        router.push('/')
-        return
-      }
-      setUser(session.user)
-      loadNotes(session.user.id).finally(() => setLoading(false))
-    })
-  }, [router])
+    if (!user) return
+    loadNotes(user.id).finally(() => setLoading(false))
+  }, [user])
 
   const loadNotes = async (userId: string) => {
     const { data, error } = await supabase
@@ -154,7 +158,6 @@ export default function DeveloperNotesPage() {
     let data, error
 
     if (editingNoteId) {
-      // 수정 모드
       const result = await supabase
         .from('developer_notes')
         .update(noteData)
@@ -164,7 +167,6 @@ export default function DeveloperNotesPage() {
       data = result.data
       error = result.error
     } else {
-      // 생성 모드
       const result = await supabase
         .from('developer_notes')
         .insert({
@@ -184,14 +186,12 @@ export default function DeveloperNotesPage() {
       return
     }
 
-    // 폼 리셋
     setTitle('')
     setContent('')
     setEditingNoteId(null)
     setShowDialog(false)
     setSubmitting(false)
 
-    // 목록 새로고침
     if (user) {
       loadNotes(user.id)
     }
@@ -216,8 +216,153 @@ export default function DeveloperNotesPage() {
     })
   }
 
-  if (loading) {
+  const columns = useMemo<ColumnDef<DeveloperNote>[]>(
+    () => [
+      {
+        accessorKey: 'title',
+        header: ({ column }) => (
+          <Button
+            variant="ghost"
+            onClick={(e) => {
+              e.stopPropagation()
+              column.toggleSorting(column.getIsSorted() === 'asc')
+            }}
+            className="h-8 px-2"
+          >
+            제목
+            <ArrowUpDown className="ml-2 h-4 w-4" />
+          </Button>
+        ),
+        cell: ({ row }) => (
+          <div className="font-medium text-card-foreground">{row.original.title}</div>
+        ),
+      },
+      {
+        accessorKey: 'content',
+        header: '내용 미리보기',
+        cell: ({ row }) => (
+          <div className="max-w-[500px] truncate text-sm text-muted-foreground">
+            {row.original.content}
+          </div>
+        ),
+      },
+      {
+        accessorKey: 'created_at',
+        header: ({ column }) => (
+          <Button
+            variant="ghost"
+            onClick={(e) => {
+              e.stopPropagation()
+              column.toggleSorting(column.getIsSorted() === 'asc')
+            }}
+            className="h-8 px-2"
+          >
+            생성일
+            <ArrowUpDown className="ml-2 h-4 w-4" />
+          </Button>
+        ),
+        cell: ({ row }) => (
+          <div className="text-xs text-muted-foreground">
+            {formatDate(row.original.created_at)}
+          </div>
+        ),
+      },
+      {
+        accessorKey: 'updated_at',
+        header: ({ column }) => (
+          <Button
+            variant="ghost"
+            onClick={(e) => {
+              e.stopPropagation()
+              column.toggleSorting(column.getIsSorted() === 'asc')
+            }}
+            className="h-8 px-2"
+          >
+            수정일
+            <ArrowUpDown className="ml-2 h-4 w-4" />
+          </Button>
+        ),
+        cell: ({ row }) => (
+          <div className="text-xs text-muted-foreground">
+            {formatDate(row.original.updated_at)}
+          </div>
+        ),
+      },
+      {
+        id: 'actions',
+        header: '작업',
+        cell: ({ row }) => {
+          const note = row.original
+          return (
+            <div className="flex gap-2">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  handleEdit(note)
+                }}
+                title="노트 수정"
+              >
+                <Edit className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  openDeleteAlert(note.id)
+                }}
+                disabled={deletingNoteId === note.id}
+                title="노트 삭제"
+              >
+                {deletingNoteId === note.id ? (
+                  <svg
+                    className="h-4 w-4 animate-spin"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                  >
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    />
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    />
+                  </svg>
+                ) : (
+                  <Trash2 className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
+          )
+        },
+      },
+    ],
+    [deletingNoteId]
+  )
+
+  const table = useReactTable({
+    data: notes,
+    columns,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    onSortingChange: setSorting,
+    state: { sorting },
+  })
+
+  if (showSkeleton) {
     return <TablePageLoadingSkeleton tabCount={1} />
+  }
+  if (loading) {
+    return null
   }
 
   if (!user) {
@@ -225,113 +370,102 @@ export default function DeveloperNotesPage() {
   }
 
   return (
-    <SharedAppLayout user={user}>
+    <>
       <div className="mx-auto max-w-7xl px-4 py-8">
-          <div className="mb-6 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <FileText className="h-6 w-6 text-foreground" />
-              <h2 className="text-2xl font-semibold text-foreground">
-                개발자 노트
-              </h2>
-            </div>
-            <Button variant="default" onClick={handleCreate}>
-              <Plus className="mr-2 h-4 w-4" />
-              새 노트 작성
+        <h2 className="mb-6 text-2xl font-semibold text-foreground">
+          개발자 노트
+        </h2>
+
+        <Tabs defaultValue="notes" className="mb-6">
+          <div className="mb-4 flex items-center justify-between">
+            <TabsList>
+              <TabsTrigger value="notes">
+                작업 내역 ({notes.length})
+              </TabsTrigger>
+            </TabsList>
+            <Button
+              variant="default"
+              size="icon"
+              onClick={handleCreate}
+              title="새 노트 작성"
+            >
+              <Plus className="h-4 w-4" />
             </Button>
           </div>
 
-          {notes.length === 0 ? (
-            <div className="rounded-lg border bg-card p-8 text-center">
-              <p className="mb-4 text-muted-foreground">
-                작성된 개발자 노트가 없습니다.
-              </p>
-              <Button onClick={handleCreate}>첫 노트 작성하기</Button>
-            </div>
-          ) : (
-            <div className="rounded-md border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[300px]">제목</TableHead>
-                    <TableHead>내용 미리보기</TableHead>
-                    <TableHead className="w-[180px]">생성일</TableHead>
-                    <TableHead className="w-[180px]">수정일</TableHead>
-                    <TableHead className="w-[100px]">작업</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {notes.map((note) => (
-                    <TableRow
-                      key={note.id}
-                      className="cursor-pointer hover:bg-muted/50"
-                      onClick={() => handleView(note)}
-                    >
-                      <TableCell className="font-medium">
-                        {note.title}
-                      </TableCell>
-                      <TableCell>
-                        <div className="max-w-[500px] truncate text-sm text-muted-foreground">
-                          {note.content}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
-                        {formatDate(note.created_at)}
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
-                        {formatDate(note.updated_at)}
-                      </TableCell>
-                      <TableCell onClick={(e) => e.stopPropagation()}>
-                        <div className="flex gap-2">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleEdit(note)}
-                            title="노트 수정"
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => openDeleteAlert(note.id)}
-                            disabled={deletingNoteId === note.id}
-                            title="노트 삭제"
-                          >
-                            {deletingNoteId === note.id ? (
-                              <svg
-                                className="h-4 w-4 animate-spin"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                              >
-                                <circle
-                                  className="opacity-25"
-                                  cx="12"
-                                  cy="12"
-                                  r="10"
-                                  stroke="currentColor"
-                                  strokeWidth="4"
-                                />
-                                <path
-                                  className="opacity-75"
-                                  fill="currentColor"
-                                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                                />
-                              </svg>
-                            ) : (
-                              <Trash2 className="h-4 w-4" />
-                            )}
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
+          <TabsContent value="notes">
+            {notes.length === 0 ? (
+              <div className="rounded-lg border bg-card p-8 text-center">
+                <p className="text-muted-foreground">
+                  작성된 개발자 노트가 없습니다.
+                </p>
+                <Button onClick={handleCreate} className="mt-4">
+                  첫 노트 작성하기
+                </Button>
+              </div>
+            ) : (
+              <div className="rounded-md border">
+                <Table>
+                  <TableHeader>
+                    {table.getHeaderGroups().map((headerGroup) => (
+                      <TableRow key={headerGroup.id}>
+                        {headerGroup.headers.map((header) => (
+                          <TableHead key={header.id}>
+                            {header.isPlaceholder
+                              ? null
+                              : flexRender(
+                                  header.column.columnDef.header,
+                                  header.getContext()
+                                )}
+                          </TableHead>
+                        ))}
+                      </TableRow>
+                    ))}
+                  </TableHeader>
+                  <TableBody>
+                    {table.getRowModel().rows?.length ? (
+                      table.getRowModel().rows.map((row) => (
+                        <TableRow
+                          key={row.id}
+                          className="cursor-pointer hover:bg-muted/50"
+                          onClick={() => handleView(row.original)}
+                          data-state={row.getIsSelected() && 'selected'}
+                        >
+                          {row.getVisibleCells().map((cell) => (
+                            <TableCell
+                              key={cell.id}
+                              onClick={
+                                cell.column.id === 'actions'
+                                  ? (e) => e.stopPropagation()
+                                  : undefined
+                              }
+                            >
+                              {flexRender(
+                                cell.column.columnDef.cell,
+                                cell.getContext()
+                              )}
+                            </TableCell>
+                          ))}
+                        </TableRow>
+                      ))
+                    ) : (
+                      <TableRow>
+                        <TableCell
+                          colSpan={columns.length}
+                          className="h-24 text-center"
+                        >
+                          결과가 없습니다.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
       </div>
 
-      {/* 작성/수정 다이얼로그 */}
       <Dialog open={showDialog} onOpenChange={handleClose}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
           <DialogHeader>
@@ -393,7 +527,6 @@ export default function DeveloperNotesPage() {
         </DialogContent>
       </Dialog>
 
-      {/* 상세 보기 다이얼로그 */}
       <Dialog open={showViewDialog} onOpenChange={setShowViewDialog}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
           <DialogHeader>
@@ -457,6 +590,6 @@ export default function DeveloperNotesPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </SharedAppLayout>
+    </>
   )
 }

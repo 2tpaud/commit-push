@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
-import { useRouter } from 'next/navigation'
 import {
   useReactTable,
   getCoreRowModel,
@@ -39,7 +38,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { Trash2, Edit, Plus, ArrowUpDown } from 'lucide-react'
-import SharedAppLayout from '@/components/SharedAppLayout'
+import { useAuthUser } from '@/components/AuthUserProvider'
 
 interface Note {
   id: string
@@ -68,8 +67,7 @@ type CommitSortKey = 'note' | 'title' | 'message' | 'created_at' | 'updated_at'
 type TabType = 'notes' | 'commits'
 
 export default function ActivityPage() {
-  const router = useRouter()
-  const [user, setUser] = useState<User | null>(null)
+  const user = useAuthUser()
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<TabType>('notes')
   const [notes, setNotes] = useState<Note[]>([])
@@ -88,18 +86,12 @@ export default function ActivityPage() {
   const [pendingDelete, setPendingDelete] = useState<{ type: 'note' | 'commit'; id: string } | null>(null)
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!session) {
-        router.push('/')
-        return
-      }
-      setUser(session.user)
-      Promise.all([
-        loadNotes(session.user.id),
-        loadCommits(session.user.id),
-      ]).finally(() => setLoading(false))
-    })
-  }, [router])
+    if (!user) return
+    Promise.all([
+      loadNotes(user.id),
+      loadCommits(user.id),
+    ]).finally(() => setLoading(false))
+  }, [user])
 
   const loadNotes = async (userId: string) => {
     const { data, error } = await supabase
@@ -421,7 +413,7 @@ export default function ActivityPage() {
   }
 
   return (
-    <SharedAppLayout user={user}>
+    <>
       <div className="mx-auto max-w-7xl px-4 py-8">
         <h2 className="mb-6 text-2xl font-semibold text-foreground">
           작업 로그
@@ -709,6 +701,6 @@ export default function ActivityPage() {
           </AlertDialog>
         </>
       )}
-    </SharedAppLayout>
+    </>
   )
 }

@@ -2,13 +2,33 @@
 
 ## 레이아웃 및 네비게이션
 
+### 라우트 그룹 (dashboard) 및 인증
+- **위치**: `app/(dashboard)/layout.tsx`
+- **역할**: 인증 구간을 한 번만 감싸고, 로그인 후 모든 대시보드 페이지에서 **동일한 레이아웃이 한 번만 마운트**되도록 함. 페이지 이동 시 레이아웃이 다시 로딩되지 않아 **깜빡임 없음**.
+- **동작**:
+  - 세션 확인 후, 비로그인이고 path가 `/`이면 `LoginForm`만 렌더
+  - 비로그인이고 path가 `/`가 아니면 `/`로 리다이렉트
+  - 로그인 시: `AuthUserProvider` → `CommitSheetProvider` → `SharedAppLayout` 순으로 `children` 감쌈
+- **프로바이더**: 각 페이지는 `useAuthUser()`, `useCommitSheet()` 훅으로 접근.
+- **대시보드 라우트** (URL에 `(dashboard)`는 포함되지 않음):
+  - `/` → `app/(dashboard)/page.tsx` (홈)
+  - `/activity` → `app/(dashboard)/activity/page.tsx` (작업 로그)
+  - `/developer-notes` → `app/(dashboard)/developer-notes/page.tsx` (개발자 노트)
+  - `/plan` → `app/(dashboard)/plan/page.tsx` (요금제)
+  - `/notes/[id]` → `app/(dashboard)/notes/[id]/page.tsx` (노트 상세)
+  - `/notes/new` → `app/(dashboard)/notes/new/page.tsx` (새 노트)
+
+### 로그인 화면
+- **위치**: `src/components/LoginForm.tsx`
+- 비로그인 사용자가 path `/`일 때만 `(dashboard)/layout.tsx`에서 `LoginForm`을 렌더. 그 외 비로그인 경로는 `/`로 리다이렉트.
+
 ### 공통 레이아웃 (SharedAppLayout)
 - **위치**: `src/components/SharedAppLayout.tsx`
-- **역할**: 로그인 후 모든 인증 페이지에서 동일한 사이드바 + 헤더 유지
+- **역할**: 로그인 후 (dashboard) 레이아웃 내 모든 페이지에서 동일한 사이드바 + 헤더 유지 (한 번만 마운트됨)
 - **구성**:
   - **헤더** (`h-14`, `border-b border-border bg-card`): SidebarTrigger, CommitPush 로고(클릭 시 홈 `/` 이동), 이메일, 로그아웃 버튼
   - **메인**: `children`으로 페이지별 콘텐츠
-- **사용 페이지**: 홈(`/`, Auth), 작업 로그(`/activity`), 개발자 노트(`/developer-notes`), 새 노트(`/notes/new`)
+- **사용 페이지**: 홈(`/`), 작업 로그(`/activity`), 개발자 노트(`/developer-notes`), 요금제(`/plan`), 노트 상세(`/notes/[id]`), 새 노트(`/notes/new`) — 모두 `(dashboard)` 하위에서 layout이 한 번만 SharedAppLayout을 렌더
 
 ### 사이드바 (AppSidebar)
 - **위치**: `src/components/AppSidebar.tsx`
@@ -19,6 +39,7 @@
   - **LayoutDashboard**: 대시보드 메뉴(준비 중)
   - **ScrollText**: 작업 로그 (`/activity`) 링크, `prefetch` 적용
   - **BookOpen**: 개발자 노트 (`/developer-notes`) 링크, `prefetch` 적용
+  - (요금제 `/plan` 등 추가 링크는 헤더/사이드바에서 필요 시 동일 방식으로 추가)
 - **메인 영역** (비율 4/5):
   - **파일 뷰**: 고정 라벨 "워크 스페이스" + 대분류 > 중분류 > 소분류 트리 (Collapsible, 노트 개수 표시)
   - **검색 뷰**: 제목/태그 탭, 검색 입력, 자동완성 노트 제목 목록
@@ -32,11 +53,12 @@
   - 구분선(`border-t`) + 고정 라벨 "최근 항목" + 최근 수정일 순 노트 제목 목록 (스크롤)
 - **정렬**: SidebarContent에 `p-0` 적용해 아이콘 행이 헤더와 높이·라인 정렬
 
-### 홈 화면 (Auth, 로그인 후)
-- SharedAppLayout 내부: 노트 제목, **커밋푸시**·**새 노트 생성** 버튼만 표시 (개발자 노트·작업 로그는 사이드바 아이콘으로 이동)
+### 홈 화면 (로그인 후)
+- **위치**: `app/(dashboard)/page.tsx`
+- SharedAppLayout 내부: 노트 제목, **커밋푸시**·**새 노트 생성** 버튼, 환영 문구, NewNoteDialog, CommitPushDialog. 개발자 노트·작업 로그·요금제는 사이드바/헤더로 이동.
 
 ### 노트 상세 페이지 (`/notes/[id]`)
-- **위치**: `app/notes/[id]/page.tsx`
+- **위치**: `app/(dashboard)/notes/[id]/page.tsx`
 - **레이아웃**: 
   - 동적 가운데 정렬: 사이드바와 커밋 내역 Sheet 상태에 따라 컨테이너가 사용 가능한 공간에서 가운데 정렬
   - 최대 폭: `max-w-4xl` (896px)
@@ -52,7 +74,7 @@
   - tags: `Tag` 아이콘, Badge variant="outline"로 표시 (`#{tag}` 형식)
   - 참고URL: `LinkIcon` 아이콘, 링크 형태로 표시
   - 상태: 상태에 따라 아이콘 변경 (`active`: `CircleCheck`, `archived`: `Archive`, `completed`: `CheckCircle2`), 한글 표시 (활성화/보관/완료)
-  - 공유여부: `Globe`(공개) 또는 `Lock`(비공개) 아이콘, Switch 컴포넌트로 토글
+  - 공유여부: `Globe`(공개) 또는 `Lock`(비공개) 아이콘, Switch 컴포넌트로 토글. **Pro/Team 플랜에서만 공유 ON 가능**하며, Free 플랜에서 ON 시도 시 AlertDialog로 업그레이드 유도(확인, 요금제 보기).
   - 공유URL: `is_public`이 `true`이고 `share_token`이 있을 때만 표시, 복사 버튼 포함
 - **커밋 내역 Sheet**:
   - 위치: 우측 슬라이드 패널 (`Sheet` 컴포넌트)
@@ -171,7 +193,7 @@ body {
 - **Skeleton** (로딩 플레이스홀더: `PageLoadingSkeleton`, `TablePageLoadingSkeleton`, `DialogTableSkeleton`, `DialogFormSkeleton` 활용)
 - **Sidebar** (SidebarProvider, Sidebar, SidebarContent, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarInset, SidebarTrigger) — 레이아웃·사이드바 트리
 - **Collapsible** (CollapsibleTrigger, CollapsibleContent) — 사이드바 대·중·소분류 펼침/접힘
-- **AlertDialog** — 삭제 확인 등
+- **AlertDialog** — 삭제 확인, Pro 플랜 업그레이드 유도(노트 공유) 등
 
 ## 버튼 스타일
 
@@ -278,10 +300,10 @@ body {
 ## Data Table 스타일 (작업 로그, 연관 노트 검색, 노트 선택, 개발자 노트)
 
 ### 사용 위치
-- 작업 로그 페이지 (`app/activity/page.tsx`) — 노트 생성 내역 탭, 커밋푸시 내역 탭
+- 작업 로그 페이지 (`app/(dashboard)/activity/page.tsx`) — 노트 생성 내역 탭, 커밋푸시 내역 탭
 - 연관 노트 검색 다이얼로그 (`RelatedNoteSearchDialog`) — 다중/단일 노트 선택 목록
 - 노트 선택 다이얼로그 (`NoteSelectDialog`) — 커밋푸시용 단일 노트 선택
-- 개발자 노트 페이지 (`app/developer-notes/page.tsx`) — 노트 목록
+- 개발자 노트 페이지 (`app/(dashboard)/developer-notes/page.tsx`) — 노트 목록
 
 ### 테이블 스타일
 - 컨테이너: `rounded-md border`
@@ -298,7 +320,7 @@ body {
 - 선택(체크박스), 카테고리, 제목, 태그, 생성일, 최종 수정일, 정렬 버튼
 
 ### 개발자 노트 컬럼
-- 제목, 내용 미리보기, 생성일, 수정일, 작업(버튼)
+- 제목, 내용 미리보기, 생성일, 수정일, 작업(버튼). 제목·생성일·수정일 컬럼 헤더 클릭 시 정렬 가능.
 
 ## 카드뷰 스타일 (참고용)
 
@@ -352,11 +374,11 @@ body {
 7. **태그 표시**: 항상 Badge variant="outline" 사용, `#{tag}` 형식 유지
 8. **Data Table**: 작업 로그(노트/커밋푸시 탭), 연관 노트 검색, 노트 선택 다이얼로그, 개발자 노트는 shadcn Table + @tanstack/react-table 사용
 9. **카드뷰 레이아웃**: 카드 형태 UI가 필요할 때 위 카드뷰 스타일 참고
-10. **공통 레이아웃**: 인증된 페이지는 `SharedAppLayout`으로 감싸 사이드바·헤더 동일 유지. CommitPush 로고는 홈(`/`) 링크.
+10. **공통 레이아웃**: 모든 인증 페이지는 `app/(dashboard)/layout.tsx`에서 한 번만 `AuthUserProvider` → `CommitSheetProvider` → `SharedAppLayout`으로 감싸며, 페이지 이동 시 레이아웃이 다시 마운트되지 않아 깜빡임이 없음. CommitPush 로고는 홈(`/`) 링크.
 11. **사이드바**: 상단 아이콘 행은 헤더와 `h-14`·`border-b` 정렬; 하단 "최근 항목" 영역은 기본 1/5 비율이며 드래그로 조절 가능(최소 20%, 최대 50%), localStorage로 상태 유지.
 12. **탭 컬러**: 활성/비활성 탭 모두 시그니처 컬러(`#1F2A44`) 텍스트 사용.
 13. **노트 상세 페이지**: 속성 섹션은 아이콘 + 속성명 + 콜론 + 값 형식으로 일관되게 표시. 속성명은 고정 폭(`w-24`)으로 값이 같은 위치에 정렬.
 14. **커밋 내역 Sheet**: `CommitSheetProvider`로 전역 상태 관리하여 페이지 이동 시에도 열림 상태 유지. 외부 클릭/ESC로 닫히지 않도록 설정.
 15. **동적 가운데 정렬**: 사이드바와 커밋 내역 Sheet 상태에 따라 노트 컨테이너가 사용 가능한 공간에서 자동으로 가운데 정렬 (`useMemo`로 계산).
-16. **공유 기능**: `is_public`이 `true`일 때 `share_token` 자동 생성. 공유 URL은 환경 변수 `NEXT_PUBLIC_SHARE_DOMAIN` 사용.
+16. **공유 기능**: 노트 외부 공유는 Pro/Team 플랜에서만 ON 가능. Free 시 AlertDialog로 업그레이드 유도. `is_public`이 `true`일 때 `share_token` 자동 생성, 공유 URL은 `NEXT_PUBLIC_SHARE_DOMAIN` 사용.
 17. **아이콘 사용**: 속성별로 적절한 아이콘 사용 (Calendar, Tag, LinkIcon, CircleCheck/Archive/CheckCircle2, Globe/Lock, GitBranch, FileText 등).
