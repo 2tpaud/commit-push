@@ -130,10 +130,6 @@ export async function POST(request: Request) {
     .eq('id', payment.id)
 
   const planLabel = payment.plan === 'team' ? 'Team' : 'Pro'
-  const isAnnual =
-    (payment as { billing_cycle?: string })?.billing_cycle === 'annual' ||
-    payment.amount === 48000 ||
-    payment.amount === 67200
   const cycleLabel = isAnnual ? '1년' : '1개월'
   await supabase.from('notifications').insert({
     user_id: user.id,
