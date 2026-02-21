@@ -144,13 +144,17 @@ export async function POST(request: Request) {
 
   const planLabel = payment.plan === 'team' ? 'Team' : 'Pro'
   const cycleLabel = payment.amount === 48000 || payment.amount === 67200 ? '1년' : '1개월'
-  await supabase.from('notifications').insert({
-    user_id: payment.user_id,
-    type: 'payment_approved',
-    payment_id: payment.id,
-    title: '결제가 완료되었습니다',
-    body: `${planLabel} ${cycleLabel} 구독이 적용되었습니다.`,
-  }).then(() => {}).catch(() => {})
+  try {
+    await supabase.from('notifications').insert({
+      user_id: payment.user_id,
+      type: 'payment_approved',
+      payment_id: payment.id,
+      title: '결제가 완료되었습니다',
+      body: `${planLabel} ${cycleLabel} 구독이 적용되었습니다.`,
+    })
+  } catch {
+    // 알림 실패해도 웹훅 응답은 OK 유지
+  }
 
   return okResponse()
 }
