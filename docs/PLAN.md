@@ -74,7 +74,21 @@ SaaS 확장을 위한 요금제 구조와 `users` 테이블 연동, 한도 정�
 
 **운영 전환 시**: 위 두 기본값을 각각 `https://api.nicepay.co.kr`, `https://pay.nicepay.co.kr/v1/js/`로 변경하고, 클라이언트 키·시크릿 키를 운영계 키로 교체해야 합니다.
 
-### 5.2 결제 주기 · 수단
+### 5.2 웹훅(PG사 콜백) 설정 (구현 완료)
+
+- **엔드포인트**: `POST /api/payment/webhook` — [나이스페이 웹훅 가이드](https://start.nicepay.co.kr/manual/admin/developers/hook/info.do)에 따라 결제(승인) 시점에 PG가 호출합니다.
+- **처리 내용**: 수신 payload의 `signature` 검증(`hex(sha256(tid+amount+ediDate+SecretKey))`) 후, `resultCode=0000`, `status=paid`일 때만 처리. `orderId`로 `payments` 조회 후 미승인이면 승인 API 호출 후 `payments`·`users` 갱신. 그다음 `notifications` 테이블에 알림 1건 삽입(결제당 1건, `payment_id` unique). 응답은 **Content-Type: text/html**, body **"OK"** 필수.
+- **알림**: return URL에서도 결제 완료 시 동일하게 `notifications`에 삽입. 헤더 **알림(벨) 아이콘**에서 조회·표시하며, 클릭 시 읽음 처리 및 결제 알림이면 `/plan`으로 이동.
+- **등록 방법**: 나이스페이 개발정보 > 웹훅에서 결제수단 선택 후 웹훅 URL을 `https://{도메인}/api/payment/webhook` 로 등록. 등록 후 TEST 호출로 동작 확인 권장.
+- **환경 변수**: 웹훅에서 DB 갱신·알림 삽입을 위해 **서버 전용** `SUPABASE_SERVICE_ROLE_KEY` 가 필요합니다. (Vercel 등 서버 환경 변수에만 설정.)
+
+- **웹훅이 꼭 필요할까?**
+  - **필수는 아닙니다.** 위 return 흐름만으로도 “결제 완료 → 플랜 반영”은 동작합니다.
+  - **웹훅을 두면 좋은 경우**: (1) 사용자가 return URL 로딩 전에 탭을 닫아서 우리 서버에 한 번도 도달하지 못한 경우, (2) PG사가 정책/운영상 “결제 결과 알림 URL” 등록을 요구하는 경우, (3) 환불·취소 등 비동기 이벤트를 PG가 서버로 알려줘야 하는 경우.
+- **나이스페이 기준**: PG사 관리자/개발 문서에서 “결제 결과 통보 URL”, “웹훅”, “비동기 알림” 등록이 **필수**인지 확인하는 것이 좋습니다. 운영 전환 시 요구사항이 있을 수 있습니다.
+- **웹훅을 쓸 경우**: 예) `POST /api/payment/webhook` 같은 엔드포인트를 만들고, PG에서 전달하는 서명/payload를 검증한 뒤 `orderId` 기준으로 `payments`·`users`를 갱신하고, return URL에서 이미 처리된 주문은 멱등하게 스킵하도록 구현하면 됩니다. 웹훅 URL은 나이스페이 개발자 콘솔/관리자에서 등록합니다.
+
+### 5.3 결제 주기 · 수단
 
 - **결제 주기**: 플랜 페이지에서 **월 구독** / **연 구독 (20% 할인)** 중 선택 가능. 연 구독은 월 구독료×12×0.8 (Pro 48,000원/년, Team 67,200원/년)로 결제되며, 만료일은 결제일 기준 12개월 후로 설정됩니다.
 - **결제 수단**: 결제하기 클릭 시 **신용카드 · 간편결제**(`cardAndEasyPay`)로만 결제창을 띄웁니다. (카드 + 네이버페이, 카카오페이, 페이코, 삼성페이, SSGPAY)
@@ -92,7 +106,7 @@ SaaS 확장을 위한 요금제 구조와 `users` 테이블 연동, 한도 정�
 ## 7. 관련 파일
 
 - **한도 상수**: `src/lib/planLimits.ts` — `PLAN_LIMITS`, `getLimitsForPlan()` (Plan 페이지·헤더 게이지 공용)
-- **헤더**: `src/components/SharedAppLayout.tsx` — 커밋푸시/새 노트 아이콘, 프로필 드롭다운(사용량 게이지, Billing, 로그아웃), NewNoteDialog·CommitPushDialog 렌더 (드롭다운 오픈 시 프로필 재조회)
+- **헤더**: `src/components/SharedAppLayout.tsx` — 커밋푸시/새 노트 아이콘, **알림(벨) 아이콘**(결제 완료 등 웹훅·return 알림 표시), 프로필 드롭다운(사용량 게이지, Billing, 로그아웃), NewNoteDialog·CommitPushDialog 렌더 (드롭다운 오픈 시 프로필 재조회)
 - **한도 차단**: `src/components/NewNoteDialog.tsx`, `src/components/CommitPushDialog.tsx`, `app/(dashboard)/notes/new/page.tsx` — 노트/커밋 생성 전 한도 초과 시 insert 차단 및 안내
 - **아바타 UI**: `src/components/ui/avatar.tsx` — shadcn 스타일 Avatar (AvatarImage, AvatarFallback)
 - **페이지**: `app/(dashboard)/plan/page.tsx` — 요금제 제목, 2열(현재 사용량 | 청구 내역), 월/연 탭, 플랜 카드(클릭 선택), 결제하기/구독 취소 (`@/lib/planLimits` 사용)

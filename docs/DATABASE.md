@@ -309,6 +309,80 @@ comment on column public.payments.billing_cycle is
 
 **Plan 페이지 청구 내역**: `app/(dashboard)/plan/page.tsx`에서는 `status = 'paid'`인 행만 조회하여 승인일(`paid_at`), 금액(`amount`), 플랜(`plan`), 상태를 표시합니다.
 
+## notifications 테이블 (앱 내 알림)
+
+헤더 벨 아이콘에 표시하는 **앱 내 알림 전반**을 저장하는 테이블입니다. 현재는 결제 완료 알림(`payment_approved`)만 사용하며, 추후 팀 협업(초대·멘션 등)·기타 이벤트 알림으로 확장할 예정입니다. `type`으로 구분하고, 결제 알림만 `payment_id`를 사용합니다.
+
+### 테이블 생성
+
+```sql
+--------------------------------------------------
+-- 1. 테이블 없으면 생성
+--------------------------------------------------
+
+create table if not exists public.notifications (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  type text not null,
+  payment_id uuid references public.payments(id) on delete set null,
+  title text not null,
+  body text,
+  read_at timestamp with time zone,
+  created_at timestamp with time zone default now(),
+  constraint notifications_payment_approved_unique
+    unique (payment_id)
+);
+
+--------------------------------------------------
+-- 2. RLS 활성화 및 정책
+--------------------------------------------------
+
+alter table public.notifications enable row level security;
+
+drop policy if exists "Users can read own notifications" on public.notifications;
+create policy "Users can read own notifications"
+  on public.notifications for select
+  using (auth.uid() = user_id);
+
+drop policy if exists "Users can update own notifications" on public.notifications;
+create policy "Users can update own notifications"
+  on public.notifications for update
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+drop policy if exists "Users can insert own notifications" on public.notifications;
+create policy "Users can insert own notifications"
+  on public.notifications for insert
+  with check (auth.uid() = user_id);
+
+--------------------------------------------------
+-- 3. COMMENT
+--------------------------------------------------
+
+comment on table public.notifications is
+'앱 내 알림 전반. 결제 완료·팀 협업·기타 이벤트 확장 예정. 헤더 벨 아이콘에 표시';
+comment on column public.notifications.id is
+'알림 PK.';
+comment on column public.notifications.user_id is
+'알림 수신 사용자. auth.users(id) 참조.';
+comment on column public.notifications.type is
+'알림 유형. payment_approved(결제 완료) / 팀 초대·멘션 등 추후 확장.';
+comment on column public.notifications.payment_id is
+'결제 알림일 때만 사용. payments(id) 참조. 결제당 1건 제한(unique). 다른 type은 null.';
+comment on column public.notifications.title is
+'알림 제목.';
+comment on column public.notifications.body is
+'알림 본문.';
+comment on column public.notifications.read_at is
+'읽은 시각. null이면 미읽음.';
+comment on column public.notifications.created_at is
+'알림 생성 시각.';
+```
+
+**실행 순서**: payments 테이블 생성 후 실행하면 됩니다.
+
+**알림 사용처**: 현재는 return URL·웹훅에서 결제 완료 시 1건 삽입. 대시보드 헤더 벨 아이콘(`SharedAppLayout`)에서 조회·표시하며, 클릭 시 읽음 처리(`PATCH /api/notifications/[id]/read`). 팀 협업 등 추가 알림은 동일 테이블에 `type`만 다르게 넣어 확장.
+
 ## notes 테이블
 
 ### 테이블 생성

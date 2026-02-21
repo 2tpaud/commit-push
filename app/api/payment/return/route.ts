@@ -59,7 +59,7 @@ export async function POST(request: Request) {
 
   const { data: payment, error: fetchError } = await supabase
     .from('payments')
-    .select('id, user_id, plan, amount, status')
+    .select('id, user_id, plan, amount, status, billing_cycle')
     .eq('order_id', orderId)
     .single()
 
@@ -128,6 +128,20 @@ export async function POST(request: Request) {
       paid_at: new Date().toISOString(),
     })
     .eq('id', payment.id)
+
+  const planLabel = payment.plan === 'team' ? 'Team' : 'Pro'
+  const isAnnual =
+    (payment as { billing_cycle?: string })?.billing_cycle === 'annual' ||
+    payment.amount === 48000 ||
+    payment.amount === 67200
+  const cycleLabel = isAnnual ? '1년' : '1개월'
+  await supabase.from('notifications').insert({
+    user_id: user.id,
+    type: 'payment_approved',
+    payment_id: payment.id,
+    title: '결제가 완료되었습니다',
+    body: `${planLabel} ${cycleLabel} 구독이 적용되었습니다.`,
+  }).then(() => {}).catch(() => {})
 
   return success()
 }

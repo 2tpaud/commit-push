@@ -26,7 +26,7 @@
 - **위치**: `src/components/SharedAppLayout.tsx`
 - **역할**: 로그인 후 (dashboard) 레이아웃 내 모든 페이지에서 동일한 사이드바 + 헤더 유지 (한 번만 마운트됨)
 - **구성**:
-  - **헤더** (`h-14`, `border-b border-border bg-card`): SidebarTrigger, CommitPush 로고(클릭 시 홈 `/` 이동), **커밋푸시 아이콘**(MessageCircleMore), **새 노트 생성 아이콘**(FilePlus), **프로필 드롭다운**(아바타, 사용량 게이지, Billing 링크, 로그아웃). 아이콘·프로필 호버 시 옅은 회색 배경(`hover:bg-gray-100`), 프로필 메뉴 항목은 `cursor-default`로 손가락 커서 비표시.
+  - **헤더** (`h-14`, `border-b border-border bg-card`): SidebarTrigger, CommitPush 로고(클릭 시 홈 `/` 이동), **커밋푸시 아이콘**(MessageCircleMore), **새 노트 생성 아이콘**(FilePlus), **알림(벨) 아이콘**(Bell, 결제 완료 등 알림 표시), **프로필 드롭다운**(아바타, 사용량 게이지, Billing 링크, 로그아웃). 아이콘·프로필 호버 시 옅은 회색 배경(`hover:bg-gray-100`), 프로필 메뉴 항목은 `cursor-default`로 손가락 커서 비표시.
   - **메인**: 헤더는 고정, 본문만 스크롤(`scrollbar-gutter: stable` 적용). `children`으로 페이지별 콘텐츠.
 - **사용 페이지**: 홈(`/`), 작업 로그(`/activity`), 개발자 노트(`/developer-notes`), 요금제(`/plan`), 노트 상세(`/notes/[id]`), 새 노트(`/notes/new`) — 모두 `(dashboard)` 하위에서 layout이 한 번만 SharedAppLayout을 렌더
 
@@ -55,7 +55,7 @@
 
 ### 홈 화면 (로그인 후)
 - **위치**: `app/(dashboard)/page.tsx`
-- SharedAppLayout 내부: 노트 제목, 환영 문구만 표시. **커밋푸시**·**새 노트 생성**은 헤더 우측의 아이콘(MessageCircleMore, FilePlus)으로 제공되며, 클릭 시 SharedAppLayout에서 렌더하는 NewNoteDialog / CommitPushDialog가 열림.
+- SharedAppLayout 내부: 노트 제목, 환영 문구만 표시. **커밋푸시**·**새 노트 생성**·**알림**은 헤더 우측의 아이콘(MessageCircleMore, FilePlus, Bell)으로 제공되며, 클릭 시 SharedAppLayout에서 렌더하는 NewNoteDialog / CommitPushDialog 또는 알림 드롭다운이 열림.
 
 ### 요금제 페이지 (`/plan`)
 - **위치**: `app/(dashboard)/plan/page.tsx`

@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import type { User } from '@supabase/supabase-js'
-import { CreditCard, LogOut, FilePlus, MessageCircleMore } from 'lucide-react'
+import { CreditCard, LogOut, FilePlus, MessageCircleMore, Bell } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import NewNoteDialog from '@/components/NewNoteDialog'
 import CommitPushDialog from '@/components/CommitPushDialog'
@@ -102,6 +102,15 @@ function getInitials(email: string): string {
   return part.slice(0, 1).toUpperCase() || '?'
 }
 
+interface NotificationRow {
+  id: string
+  type: string
+  title: string
+  body: string | null
+  read_at: string | null
+  created_at: string
+}
+
 /** 페이지 이동 시 프로필 재로딩 방지용 캐시 (같은 user.id면 캐시에서 바로 표시) */
 const profileCache: Record<string, UserProfile> = {}
 
@@ -136,6 +145,8 @@ export default function SharedAppLayout({ user, children }: SharedAppLayoutProps
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const [showNewNoteDialog, setShowNewNoteDialog] = useState(false)
   const [showCommitPushDialog, setShowCommitPushDialog] = useState(false)
+  const [notifications, setNotifications] = useState<NotificationRow[]>([])
+  const [notificationOpen, setNotificationOpen] = useState(false)
 
   useEffect(() => {
     let mounted = true
@@ -144,6 +155,13 @@ export default function SharedAppLayout({ user, children }: SharedAppLayoutProps
       setProfile(next)
       profileCache[user.id] = next
     })
+    fetch('/api/notifications')
+      .then((res) => (res.ok ? res.json() : []))
+      .then((list: NotificationRow[]) => {
+        if (!mounted) return
+        setNotifications(Array.isArray(list) ? list : [])
+      })
+      .catch(() => {})
     return () => { mounted = false }
   }, [user.id])
 
@@ -210,6 +228,77 @@ export default function SharedAppLayout({ user, children }: SharedAppLayoutProps
                   >
                     <FilePlus className="h-5 w-5" />
                   </Button>
+                  <DropdownMenu open={notificationOpen} onOpenChange={(open) => {
+                    setNotificationOpen(open)
+                    if (open) {
+                      fetch('/api/notifications')
+                        .then((res) => res.ok ? res.json() : [])
+                        .then((list: NotificationRow[]) => setNotifications(Array.isArray(list) ? list : []))
+                        .catch(() => setNotifications([]))
+                    }
+                  }}>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="relative shrink-0 text-[#1F2A44] hover:bg-gray-100 hover:text-[#1F2A44] dark:hover:bg-gray-800"
+                        title="알림"
+                        aria-label="알림"
+                      >
+                        <Bell className="h-5 w-5" />
+                        {notifications.some((n) => !n.read_at) ? (
+                          <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-[#1F2A44] text-[10px] font-medium text-white">
+                            {notifications.filter((n) => !n.read_at).length}
+                          </span>
+                        ) : null}
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent
+                      align="end"
+                      className="w-80 max-h-[min(24rem,70vh)] overflow-y-auto border border-gray-200 bg-white p-0 shadow-md dark:border-gray-700 dark:bg-zinc-900"
+                    >
+                      <DropdownMenuLabel className="border-b border-border px-3 py-2 text-sm font-medium">
+                        알림
+                      </DropdownMenuLabel>
+                      {notifications.length === 0 ? (
+                        <div className="px-3 py-6 text-center text-sm text-muted-foreground">
+                          알림이 없습니다.
+                        </div>
+                      ) : (
+                        notifications.map((n) => (
+                          <DropdownMenuItem
+                            key={n.id}
+                            className="flex cursor-pointer flex-col items-start gap-0.5 px-3 py-2.5 text-left"
+                            onSelect={async (e) => {
+                              e.preventDefault()
+                              if (!n.read_at) {
+                                await fetch(`/api/notifications/${n.id}/read`, { method: 'PATCH' })
+                                setNotifications((prev) =>
+                                  prev.map((x) => (x.id === n.id ? { ...x, read_at: new Date().toISOString() } : x))
+                                )
+                              }
+                              if (n.type === 'payment_approved') {
+                                window.location.href = '/plan'
+                              }
+                            }}
+                          >
+                            <span className="font-medium text-foreground">{n.title}</span>
+                            {n.body ? (
+                              <span className="text-xs text-muted-foreground">{n.body}</span>
+                            ) : null}
+                            <span className="text-xs text-muted-foreground">
+                              {new Date(n.created_at).toLocaleDateString('ko-KR', {
+                                month: 'short',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })}
+                            </span>
+                          </DropdownMenuItem>
+                        ))
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                   <div className="w-56 min-w-[14rem] rounded-md transition-colors hover:bg-gray-100 dark:hover:bg-gray-800">
                     <DropdownMenu open={dropdownOpen} onOpenChange={(open) => {
                       setDropdownOpen(open)
