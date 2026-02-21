@@ -26,8 +26,8 @@
 - **위치**: `src/components/SharedAppLayout.tsx`
 - **역할**: 로그인 후 (dashboard) 레이아웃 내 모든 페이지에서 동일한 사이드바 + 헤더 유지 (한 번만 마운트됨)
 - **구성**:
-  - **헤더** (`h-14`, `border-b border-border bg-card`): SidebarTrigger, CommitPush 로고(클릭 시 홈 `/` 이동), 이메일, 로그아웃 버튼
-  - **메인**: `children`으로 페이지별 콘텐츠
+  - **헤더** (`h-14`, `border-b border-border bg-card`): SidebarTrigger, CommitPush 로고(클릭 시 홈 `/` 이동), **커밋푸시 아이콘**(MessageCircleMore), **새 노트 생성 아이콘**(FilePlus), **프로필 드롭다운**(아바타, 사용량 게이지, Billing 링크, 로그아웃). 아이콘·프로필 호버 시 옅은 회색 배경(`hover:bg-gray-100`), 프로필 메뉴 항목은 `cursor-default`로 손가락 커서 비표시.
+  - **메인**: 헤더는 고정, 본문만 스크롤(`scrollbar-gutter: stable` 적용). `children`으로 페이지별 콘텐츠.
 - **사용 페이지**: 홈(`/`), 작업 로그(`/activity`), 개발자 노트(`/developer-notes`), 요금제(`/plan`), 노트 상세(`/notes/[id]`), 새 노트(`/notes/new`) — 모두 `(dashboard)` 하위에서 layout이 한 번만 SharedAppLayout을 렌더
 
 ### 사이드바 (AppSidebar)
@@ -55,7 +55,12 @@
 
 ### 홈 화면 (로그인 후)
 - **위치**: `app/(dashboard)/page.tsx`
-- SharedAppLayout 내부: 노트 제목, **커밋푸시**·**새 노트 생성** 버튼, 환영 문구, NewNoteDialog, CommitPushDialog. 개발자 노트·작업 로그·요금제는 사이드바/헤더로 이동.
+- SharedAppLayout 내부: 노트 제목, 환영 문구만 표시. **커밋푸시**·**새 노트 생성**은 헤더 우측의 아이콘(MessageCircleMore, FilePlus)으로 제공되며, 클릭 시 SharedAppLayout에서 렌더하는 NewNoteDialog / CommitPushDialog가 열림.
+
+### 요금제 페이지 (`/plan`)
+- **위치**: `app/(dashboard)/plan/page.tsx`
+- **상단**: 요금제 제목 하단에 2열 그리드. 좌측 **현재 사용량** 카드(플랜, 만료일, 노트/커밋 게이지), 우측 **청구 내역** 카드(`payments`에서 `status = 'paid'`만 조회, 승인일·금액·플랜·상태 테이블). 두 카드 높이 동일(`md:items-stretch`), 청구 내역이 길면 카드 내부 스크롤.
+- **플랜 카드**: Free / Pro / Team 3종. 카드 클릭 시 해당 플랜 선택(링 `ring-2 ring-[#1F2A44]`). 월/연 구독 탭, 결제하기·구독 취소·사용 중 버튼.
 
 ### 노트 상세 페이지 (`/notes/[id]`)
 - **위치**: `app/(dashboard)/notes/[id]/page.tsx`

@@ -7,13 +7,14 @@
 | 항목 | 없을 때 | 이미 있을 때 |
 |------|---------|----------------|
 | **테이블** (`create table if not exists`) | 새로 생성 | **그대로 둠** (기존 테이블·데이터 유지, 덮어쓰기 아님) |
+| **컬럼 추가** (`alter table ... add column if not exists`) | — | 컬럼 없으면 **추가**, 있으면 **그대로 둠** (기존 데이터·타입 유지) |
 | **RLS 정책** (`drop policy if exists` 후 `create policy`) | 새로 생성 | 기존 정책 삭제 후 새 정책으로 **교체** |
 | **함수** (`create or replace function`) | 새로 생성 | 내용만 **덮어씀** |
 | **트리거** (`drop trigger if exists` 후 `create trigger`) | 새로 생성 | 기존 트리거 삭제 후 새 트리거로 **교체** |
 | **코멘트** (`comment on ...`) | 새로 생성 | **덮어씀** |
 | **인덱스** (`create index if not exists`) | 새로 생성 | 이미 있으면 **그대로 둠** (스킵) |
 
-요약: **테이블**은 없으면 생성, 있으면 건드리지 않음(데이터 유지). **정책·함수·트리거·코멘트**는 있으면 새 내용으로 갱신됨.
+요약: **테이블**은 없으면 생성, 있으면 건드리지 않음(데이터 유지). **컬럼 추가**는 기존 테이블에 없는 컬럼만 추가. **정책·함수·트리거·코멘트**는 있으면 새 내용으로 갱신됨.
 
 ---
 
@@ -77,7 +78,7 @@ with check (auth.uid() = id);
 --------------------------------------------------
 
 comment on table public.users is
-'CommitPush 서비스 사용자 프로필 테이블. auth.users와 1:1 연결됨.';
+'CommitPush 서비스 사용자 프로필 테이블. auth.users와 1:1 연결';
 
 comment on column public.users.id is
 'auth.users.id와 동일한 UUID. 인증 계정과 1:1 매핑되는 기본키.';
@@ -225,6 +226,89 @@ create trigger on_auth_user_created
 - **정책**: "Users can manage their own profile"
   - 사용자는 자신의 프로필만 조회/수정/삭제 가능 (`auth.uid() = id`)
 
+## payments 테이블 (PG 결제 이력)
+
+### 테이블 생성 및 업데이트
+
+```sql
+--------------------------------------------------
+-- 1. 테이블 없으면 생성
+--------------------------------------------------
+
+create table if not exists public.payments (
+  id uuid primary key default gen_random_uuid(),
+  order_id text unique not null,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  plan text not null,
+  amount integer not null,
+  status text not null default 'pending',
+  tid text,
+  paid_at timestamp with time zone,
+  created_at timestamp with time zone default now(),
+  billing_cycle text default 'monthly'
+);
+
+--------------------------------------------------
+-- 2. 기존 테이블에 없는 컬럼만 추가 (있는 건 그대로)
+--------------------------------------------------
+
+alter table public.payments
+  add column if not exists billing_cycle text default 'monthly';
+
+--------------------------------------------------
+-- 3. RLS 활성화 및 정책
+--------------------------------------------------
+
+alter table public.payments enable row level security;
+
+drop policy if exists "Users can read own payments" on public.payments;
+create policy "Users can read own payments"
+  on public.payments for select
+  using (auth.uid() = user_id);
+
+drop policy if exists "Users can insert own payments" on public.payments;
+create policy "Users can insert own payments"
+  on public.payments for insert
+  with check (auth.uid() = user_id);
+
+drop policy if exists "Users can update own payments" on public.payments;
+create policy "Users can update own payments"
+  on public.payments for update
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+--------------------------------------------------
+-- 4. COMMENT
+--------------------------------------------------
+
+comment on table public.payments is
+'PG 결제 이력. 주문 생성 후 return URL에서 승인 API 호출 및 users.plan 갱신 시 사용';
+comment on column public.payments.id is
+'결제 이력 PK.';
+comment on column public.payments.order_id is
+'PG사에 전달하는 주문번호. return 콜백에서 조회용.';
+comment on column public.payments.user_id is
+'결제한 사용자. auth.users(id) 참조.';
+comment on column public.payments.plan is
+'결제 대상 플랜. pro | team';
+comment on column public.payments.amount is
+'결제 금액(원). 월 구독은 월액, 연 구독은 연간 할인가.';
+comment on column public.payments.status is
+'pending: 결제창 요청 후 대기, paid: 승인 완료, failed: 인증/승인 실패';
+comment on column public.payments.tid is
+'PG사 거래키. 승인 API 호출 후 저장.';
+comment on column public.payments.paid_at is
+'승인 완료 시각.';
+comment on column public.payments.created_at is
+'주문 생성 시각.';
+comment on column public.payments.billing_cycle is
+'결제 주기. monthly: 1개월 만료, annual: 12개월 만료';
+```
+
+**실행 순서**: users 테이블 생성 후 실행하면 됩니다.
+
+**Plan 페이지 청구 내역**: `app/(dashboard)/plan/page.tsx`에서는 `status = 'paid'`인 행만 조회하여 승인일(`paid_at`), 금액(`amount`), 플랜(`plan`), 상태를 표시합니다.
+
 ## notes 테이블
 
 ### 테이블 생성
@@ -267,7 +351,7 @@ create table if not exists public.notes (
 --------------------------------------------------
 
 comment on table public.notes is
-'CommitPush의 노트 테이블. 하나의 노트는 여러 커밋을 가지는 작업 단위 컨테이너 역할을 한다.';
+'CommitPush의 노트 테이블. 하나의 노트는 여러 커밋을 가지는 작업 단위 컨테이너 역할';
 
 comment on column public.notes.id is
 '노트의 고유 식별자(UUID). 기본키.';
@@ -396,7 +480,7 @@ create table if not exists public.developer_notes (
 --------------------------------------------------
 
 comment on table public.developer_notes is
-'개발자 노트 테이블. 커밋 메시지 형식의 개발 작업 기록을 저장한다.';
+'개발자 노트 테이블. 커밋 메시지 형식의 개발 작업 기록을 저장';
 
 comment on column public.developer_notes.id is
 '개발자 노트의 고유 식별자(UUID). 기본키.';
@@ -486,7 +570,7 @@ create table if not exists public.commits (
 --------------------------------------------------
 
 comment on table public.commits is
-'CommitPush의 커밋 테이블. 노트에 대한 시간축 기록(커밋)을 저장한다.';
+'CommitPush의 커밋 테이블. 노트에 대한 시간축 기록(커밋)을 저장';
 
 comment on column public.commits.id is
 '커밋의 고유 식별자(UUID). 기본키.';

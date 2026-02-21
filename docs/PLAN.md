@@ -43,37 +43,60 @@ SaaS 확장을 위한 요금제 구조와 `users` 테이블 연동, 한도 정�
 ## 4. UI/진입 경로
 
 - **Plan 페이지**: `/plan` (로그인 필요, `app/(dashboard)/plan/page.tsx`)
-- **헤더 (상단 우측)**: 사용량 게이지(노트/커밋), Plan 링크, 프로필 아바타(`avatar_url`, 마우스 오버 시 `full_name`), 로그아웃. 드롭다운 열 때마다 프로필(사용량) 재조회하여 게이지 최신화.
+- **헤더 (상단 우측)**: **커밋푸시 아이콘**(MessageCircleMore), **새 노트 생성 아이콘**(FilePlus) → 클릭 시 각각 CommitPushDialog / NewNoteDialog 오픈. 그 우측에 **프로필 드롭다운**(아바타, 사용량 게이지, Billing 링크, 로그아웃). 드롭다운 열 때마다 프로필(사용량) 재조회.
 - Plan 페이지에서 표시하는 내용:
-  - 현재 플랜(`plan`), 만료일(`plan_expires_at` 유무 시)
-  - **현재 사용량**: 노트·커밋 각각 **게이지(진행률 바)** + `total_notes`/한도, `total_commits`/한도
-  - Free / Pro / Team 3가지 플랜 카드 (가격 0원·5,000원·7,000원/월, 특징, “현재 플랜” 뱃지)
+  - 상단 **2열 레이아웃**: 좌측 **현재 사용량** 카드(플랜, 만료일, 노트/커밋 게이지), 우측 **청구 내역** 카드(`payments` 테이블에서 `status = 'paid'`만 조회, 승인일·금액·플랜·상태 표시, 사용량 카드와 동일 높이·길면 스크롤).
+  - 월/연 구독 탭, Free / Pro / Team 플랜 카드(가격, 특징, "현재 플랜" 뱃지). **카드 클릭 시 해당 플랜 선택**(링 강조).
 
 ---
 
-## 5. 결제 연동 (예정)
+## 5. 결제 연동 (나이스페이)
 
-- PG사 가입 후 결제창 연동 시:
-  - 결제 성공/갱신 시 `users.plan`, `users.plan_expires_at` 업데이트
-  - 필요 시 `subscriptions` 또는 `payments` 테이블 추가하여 이력 관리
-- Plan 페이지의 “준비 중” 버튼을 결제/업그레이드 플로우로 교체하면 됩니다.
+- **구현 상태**: Plan 페이지에서 Pro/Team 플랜에 대해 "결제하기" 버튼으로 나이스페이 결제창(Server 승인) 연동 완료.
+- **흐름**: 주문 생성(`POST /api/payment/create`) → 결제창 호출(JS SDK `AUTHNICE.requestPay`) → 인증 후 `returnUrl`로 POST → 서버에서 승인 API 호출 → `users.plan` / `users.plan_expires_at` 갱신, `payments` 이력 저장.
+- **DB**: 결제 이력·멱등성용 `payments` 테이블 사용. 스키마는 `docs/DATABASE.md`의 "payments 테이블 (PG 결제 이력)" 참고.
+
+### 5.1 환경 변수 (필수)
+
+아래 키는 [나이스페이 개발정보](https://start.nicepay.co.kr/manual/admin/developers/key/info.do)에서 발급한 값을 사용합니다.
+
+| 변수명 | 용도 | 노출 |
+|--------|------|------|
+| `NEXT_PUBLIC_NICE_PAY_CLIENT_ID` | 결제창 JS SDK용 클라이언트 키 | 브라우저 (공개) |
+| `NICE_PAY_SECRET_KEY` | 승인 API 호출용 시크릿 키. **절대 클라이언트/저장소에 올리지 말 것.** | 서버 전용 |
+
+선택(기본값 있음):
+
+| 변수명 | 용도 | 기본값 |
+|--------|------|--------|
+| `NICE_PAY_API_BASE` | 승인 API 도메인 | `https://sandbox-api.nicepay.co.kr` (테스트) |
+| `NEXT_PUBLIC_NICE_PAY_SDK_URL` | 결제창 JS 스크립트 URL | `https://sandbox-pay.nicepay.co.kr/v1/js/` (테스트) |
+
+**운영 전환 시**: 위 두 기본값을 각각 `https://api.nicepay.co.kr`, `https://pay.nicepay.co.kr/v1/js/`로 변경하고, 클라이언트 키·시크릿 키를 운영계 키로 교체해야 합니다.
+
+### 5.2 결제 주기 · 수단
+
+- **결제 주기**: 플랜 페이지에서 **월 구독** / **연 구독 (20% 할인)** 중 선택 가능. 연 구독은 월 구독료×12×0.8 (Pro 48,000원/년, Team 67,200원/년)로 결제되며, 만료일은 결제일 기준 12개월 후로 설정됩니다.
+- **결제 수단**: 결제하기 클릭 시 **신용카드 · 간편결제**(`cardAndEasyPay`)로만 결제창을 띄웁니다. (카드 + 네이버페이, 카카오페이, 페이코, 삼성페이, SSGPAY)
 
 ---
 
-## 6. 한도 체크 권장 위치
+## 6. 한도 체크 (구현 완료)
 
-- **노트 생성**: `INSERT` 전 또는 API에서 `total_notes < PLAN_LIMITS[plan].maxNotes` 여부 확인
-- **커밋 생성**: 동일하게 `total_commits`와 `maxCommits` 비교
-- 만료: `plan !== 'free'`이고 `plan_expires_at < now()`이면 플랜을 `free`로 다운그레이드하거나 접근 제한 처리
+- **노트 생성**: `NewNoteDialog`, `app/(dashboard)/notes/new/page.tsx`에서 제출 전 `users`에서 `plan`, `total_notes` 조회 후 `total_notes >= getLimitsForPlan(plan).maxNotes`이면 insert 차단, 안내 메시지 표시.
+- **커밋 생성**: `CommitPushDialog`에서 새 커밋 제출 전 `total_commits >= getLimitsForPlan(plan).maxCommits`이면 insert 차단, 안내 메시지 표시.
+- **만료**: 대시보드 진입·로그인 시 `/api/plan/check-expiry` 호출. `plan !== 'free'`이고 `plan_expires_at < now()`이면 `users.plan`을 `free`로 갱신.
 
 ---
 
 ## 7. 관련 파일
 
 - **한도 상수**: `src/lib/planLimits.ts` — `PLAN_LIMITS`, `getLimitsForPlan()` (Plan 페이지·헤더 게이지 공용)
-- **헤더**: `src/components/SharedAppLayout.tsx` — 사용량 게이지, Plan 링크, 프로필 아바타(`avatar_url`, `full_name`), 로그아웃 (드롭다운 오픈 시 프로필 재조회)
+- **헤더**: `src/components/SharedAppLayout.tsx` — 커밋푸시/새 노트 아이콘, 프로필 드롭다운(사용량 게이지, Billing, 로그아웃), NewNoteDialog·CommitPushDialog 렌더 (드롭다운 오픈 시 프로필 재조회)
+- **한도 차단**: `src/components/NewNoteDialog.tsx`, `src/components/CommitPushDialog.tsx`, `app/(dashboard)/notes/new/page.tsx` — 노트/커밋 생성 전 한도 초과 시 insert 차단 및 안내
 - **아바타 UI**: `src/components/ui/avatar.tsx` — shadcn 스타일 Avatar (AvatarImage, AvatarFallback)
-- **페이지**: `app/(dashboard)/plan/page.tsx` — 요금제 소개, 현재 사용량 게이지, 플랜 카드 (`@/lib/planLimits` 사용)
+- **페이지**: `app/(dashboard)/plan/page.tsx` — 요금제 제목, 2열(현재 사용량 | 청구 내역), 월/연 탭, 플랜 카드(클릭 선택), 결제하기/구독 취소 (`@/lib/planLimits` 사용)
+- **API**: `app/api/plan/check-expiry/route.ts` — 만료된 유료 플랜을 free로 갱신
 - **레이아웃**: Plan은 `app/(dashboard)/layout.tsx` 하위에서 인증·SharedAppLayout 공유 (별도 plan 전용 layout 없음)
 - **노트 공유 제한**: `app/(dashboard)/notes/[id]/page.tsx` — 공유여부 Switch는 Pro/Team일 때만 ON 가능, Free 시 AlertDialog로 업그레이드 유도
 

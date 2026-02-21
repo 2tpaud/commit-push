@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../lib/supabaseClient'
+import { getLimitsForPlan } from '../lib/planLimits'
 import type { User } from '@supabase/supabase-js'
 import RelatedNoteSearchDialog from './RelatedNoteSearchDialog'
 import {
@@ -728,6 +729,21 @@ export default function NewNoteDialog({
     if (!user || !title.trim()) return
 
     setSubmitting(true)
+
+    if (!noteId) {
+      const { data: profile } = await supabase
+        .from('users')
+        .select('plan, total_notes')
+        .eq('id', user.id)
+        .single()
+      const limits = getLimitsForPlan(profile?.plan ?? null)
+      const totalNotes = profile?.total_notes ?? 0
+      if (totalNotes >= limits.maxNotes) {
+        alert(`노트 한도를 초과했습니다. (${totalNotes}/${limits.maxNotes}) 플랜 업그레이드를 원하시면 플랜 페이지를 확인해 주세요.`)
+        setSubmitting(false)
+        return
+      }
+    }
 
     const noteData = {
       title: title.trim(),

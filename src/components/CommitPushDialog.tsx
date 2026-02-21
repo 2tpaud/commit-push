@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabaseClient'
+import { getLimitsForPlan } from '@/lib/planLimits'
 import type { User } from '@supabase/supabase-js'
 import NoteSelectDialog from './NoteSelectDialog'
 import { DialogFormSkeleton } from './PageLoadingSkeleton'
@@ -206,6 +207,18 @@ export default function CommitPushDialog({
         return
       }
     } else {
+      const { data: profile } = await supabase
+        .from('users')
+        .select('plan, total_commits')
+        .eq('id', user.id)
+        .single()
+      const limits = getLimitsForPlan(profile?.plan ?? null)
+      const totalCommits = profile?.total_commits ?? 0
+      if (totalCommits >= limits.maxCommits) {
+        alert(`커밋 한도를 초과했습니다. (${totalCommits}/${limits.maxCommits}) 플랜 업그레이드를 원하시면 플랜 페이지를 확인해 주세요.`)
+        setSubmitting(false)
+        return
+      }
       const insertPayload: Record<string, unknown> = {
         user_id: user.id,
         ...basePayload,

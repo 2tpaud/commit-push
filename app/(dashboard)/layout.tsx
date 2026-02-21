@@ -18,12 +18,35 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   useEffect(() => {
     let mounted = true
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    const run = async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!mounted) return
+      if (session?.user?.id && session.access_token) {
+        try {
+          await fetch('/api/plan/check-expiry', {
+            headers: { Authorization: `Bearer ${session.access_token}` },
+          })
+        } catch {
+          // ignore
+        }
+      }
       if (!mounted) return
       setUser(session?.user ?? null)
       setLoading(false)
-    })
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    }
+    run()
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (!mounted) return
+      if (session?.user?.id && session?.access_token) {
+        try {
+          await fetch('/api/plan/check-expiry', {
+            headers: { Authorization: `Bearer ${session.access_token}` },
+          })
+        } catch {
+          // ignore
+        }
+      }
+      if (!mounted) return
       setUser(session?.user ?? null)
       setLoading(false)
     })

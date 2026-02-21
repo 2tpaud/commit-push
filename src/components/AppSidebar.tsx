@@ -196,7 +196,7 @@ export default function AppSidebar({ userId }: { userId: string }) {
   }, [])
 
   const iconButtonClass =
-    'flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-transparent text-[#1F2A44] hover:bg-accent hover:text-[#1F2A44] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+    'flex h-9 w-9 shrink-0 cursor-default items-center justify-center rounded-md border border-transparent text-[#1F2A44] hover:bg-gray-100 hover:text-[#1F2A44] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:hover:bg-gray-800'
 
   const mainRatio = 1 - recentItemsRatio
 
@@ -211,7 +211,7 @@ export default function AppSidebar({ userId }: { userId: string }) {
             onClick={() => setSidebarView('tree')}
             className={cn(
               iconButtonClass,
-              sidebarView === 'tree' && 'bg-accent text-[#1F2A44]'
+              sidebarView === 'tree' && 'bg-gray-100 text-[#1F2A44] dark:bg-gray-800'
             )}
             title="노트 분류 트리"
             aria-label="노트 분류 트리"
@@ -223,7 +223,7 @@ export default function AppSidebar({ userId }: { userId: string }) {
             onClick={() => setSidebarView('search')}
             className={cn(
               iconButtonClass,
-              sidebarView === 'search' && 'bg-accent text-[#1F2A44]'
+              sidebarView === 'search' && 'bg-gray-100 text-[#1F2A44] dark:bg-gray-800'
             )}
             title="제목·태그 검색"
             aria-label="제목·태그 검색"
@@ -235,7 +235,7 @@ export default function AppSidebar({ userId }: { userId: string }) {
             onClick={() => setSidebarView('dashboard')}
             className={cn(
               iconButtonClass,
-              sidebarView === 'dashboard' && 'bg-accent text-[#1F2A44]'
+              sidebarView === 'dashboard' && 'bg-gray-100 text-[#1F2A44] dark:bg-gray-800'
             )}
             title="대시보드 메뉴"
             aria-label="대시보드 메뉴"
@@ -289,7 +289,7 @@ export default function AppSidebar({ userId }: { userId: string }) {
                     <SidebarMenuItem key={largeKey}>
                       <Collapsible defaultOpen className="group/collapsible">
                         <CollapsibleTrigger asChild>
-                          <SidebarMenuButton className="w-full justify-between gap-0 px-2 py-1.5 text-[#1F2A44]">
+                          <SidebarMenuButton className="w-full justify-between gap-0 px-2 py-1.5 text-[#1F2A44] hover:bg-gray-100 hover:text-[#1F2A44] dark:hover:bg-gray-800">
                             <span className="flex min-w-0 flex-1 items-center gap-2 truncate">
                               <ChevronRight
                                 className="h-4 w-4 shrink-0 transition-transform group-data-[state=open]/collapsible:rotate-90"
@@ -317,7 +317,7 @@ export default function AppSidebar({ userId }: { userId: string }) {
                                         type="button"
                                         className={cn(
                                           'flex w-full min-w-0 items-center gap-2 rounded-md px-2 py-1 text-left text-xs font-medium text-[#1F2A44]',
-                                          'hover:bg-accent hover:text-[#1F2A44]',
+                                          'hover:bg-gray-100 hover:text-[#1F2A44] dark:hover:bg-gray-800',
                                           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
                                         )}
                                       >
@@ -345,7 +345,7 @@ export default function AppSidebar({ userId }: { userId: string }) {
                                                     type="button"
                                                     className={cn(
                                                       'flex w-full min-w-0 items-center gap-2 rounded-md px-2 py-1 text-left text-xs text-[#1F2A44]',
-                                                      'hover:bg-accent hover:text-[#1F2A44]',
+                                                      'hover:bg-gray-100 hover:text-[#1F2A44] dark:hover:bg-gray-800',
                                                       'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
                                                     )}
                                                   >
@@ -367,7 +367,7 @@ export default function AppSidebar({ userId }: { userId: string }) {
                                                           href={`/notes/${note.id}`}
                                                           className={cn(
                                                             'flex min-w-0 items-center gap-2 rounded-md px-2 py-1 text-xs text-[#1F2A44]',
-                                                            'hover:bg-accent hover:text-[#1F2A44]',
+                                                            'hover:bg-gray-100 hover:text-[#1F2A44] dark:hover:bg-gray-800',
                                                             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
                                                           )}
                                                         >
@@ -503,7 +503,7 @@ export default function AppSidebar({ userId }: { userId: string }) {
                   <li key={note.id}>
                     <Link
                       href={`/notes/${note.id}`}
-                      className="block truncate rounded-md px-2 py-1 text-xs text-[#1F2A44] hover:bg-accent hover:text-[#1F2A44] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      className="block cursor-default truncate rounded-md px-2 py-1 text-xs text-[#1F2A44] hover:bg-gray-100 hover:text-[#1F2A44] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:hover:bg-gray-800"
                     >
                       {note.title}
                     </Link>

@@ -127,7 +127,7 @@ const SidebarInset = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <main
     ref={ref}
-    className={cn("flex-1 overflow-auto", className)}
+    className={cn("flex min-h-0 flex-1 flex-col", className)}
     {...props}
   />
 ))
@@ -143,7 +143,7 @@ const SidebarTrigger = React.forwardRef<
       ref={ref}
       variant="ghost"
       size="icon"
-      className={cn("shrink-0", className)}
+      className={cn("shrink-0 cursor-default text-[#1F2A44] hover:bg-gray-100 hover:text-[#1F2A44] dark:hover:bg-gray-800", className)}
       onClick={() => setOpen(!open)}
       aria-label={open ? "사이드바 닫기" : "사이드바 열기"}
       {...props}

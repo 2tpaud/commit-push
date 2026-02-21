@@ -4,8 +4,10 @@ import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import type { User } from '@supabase/supabase-js'
-import { CreditCard, LogOut } from 'lucide-react'
+import { CreditCard, LogOut, FilePlus, MessageCircleMore } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
+import NewNoteDialog from '@/components/NewNoteDialog'
+import CommitPushDialog from '@/components/CommitPushDialog'
 import { getLimitsForPlan } from '@/lib/planLimits'
 import AppSidebar from './AppSidebar'
 import { Button } from './ui/button'
@@ -132,6 +134,8 @@ async function fetchUserProfile(userId: string): Promise<UserProfile> {
 export default function SharedAppLayout({ user, children }: SharedAppLayoutProps) {
   const [profile, setProfile] = useState<UserProfile | null>(() => profileCache[user.id] ?? null)
   const [dropdownOpen, setDropdownOpen] = useState(false)
+  const [showNewNoteDialog, setShowNewNoteDialog] = useState(false)
+  const [showCommitPushDialog, setShowCommitPushDialog] = useState(false)
 
   useEffect(() => {
     let mounted = true
@@ -163,7 +167,7 @@ export default function SharedAppLayout({ user, children }: SharedAppLayoutProps
       <div className="flex h-screen w-full bg-background">
         <AppSidebar userId={user.id} />
         <SidebarInset>
-          <div className="flex min-h-screen flex-col">
+          <div className="flex min-h-0 flex-1 flex-col">
             <header className="flex h-14 shrink-0 items-center border-b border-border bg-card">
               <div className="flex w-full items-center justify-between gap-4 px-4">
                 <div className="flex items-center gap-2">
@@ -185,7 +189,27 @@ export default function SharedAppLayout({ user, children }: SharedAppLayoutProps
                     </Link>
                   </h1>
                 </div>
-                <div className="flex items-center gap-3 sm:gap-4">
+                <div className="flex items-center gap-1 sm:gap-1.5">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="shrink-0 text-[#1F2A44] hover:bg-gray-100 hover:text-[#1F2A44] dark:hover:bg-gray-800"
+                    onClick={() => setShowCommitPushDialog(true)}
+                    title="커밋푸시"
+                    aria-label="커밋푸시"
+                  >
+                    <MessageCircleMore className="h-5 w-5" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="shrink-0 text-[#1F2A44] hover:bg-gray-100 hover:text-[#1F2A44] dark:hover:bg-gray-800"
+                    onClick={() => setShowNewNoteDialog(true)}
+                    title="새 노트 생성"
+                    aria-label="새 노트 생성"
+                  >
+                    <FilePlus className="h-5 w-5" />
+                  </Button>
                   <div className="w-56 min-w-[14rem] rounded-md transition-colors hover:bg-gray-100 dark:hover:bg-gray-800">
                     <DropdownMenu open={dropdownOpen} onOpenChange={(open) => {
                       setDropdownOpen(open)
@@ -241,7 +265,7 @@ export default function SharedAppLayout({ user, children }: SharedAppLayoutProps
                         <DropdownMenuSeparator />
                         {profile && <UsageGaugesInMenu profile={profile} />}
                         <DropdownMenuItem asChild>
-                          <Link href="/plan" className="flex cursor-pointer items-center gap-2">
+                          <Link href="/plan" className="flex !cursor-default items-center gap-2">
                             <CreditCard className="h-4 w-4" />
                             Billing
                           </Link>
@@ -249,7 +273,7 @@ export default function SharedAppLayout({ user, children }: SharedAppLayoutProps
                         <DropdownMenuSeparator />
                         <DropdownMenuItem
                           onClick={handleLogout}
-                          className="cursor-pointer text-destructive focus:text-destructive data-[highlighted]:text-destructive"
+                          className="!cursor-default text-destructive focus:text-destructive data-[highlighted]:text-destructive"
                         >
                           <LogOut className="h-4 w-4" />
                           Log out
@@ -260,12 +284,22 @@ export default function SharedAppLayout({ user, children }: SharedAppLayoutProps
                 </div>
               </div>
             </header>
-            <main className="flex-1">
+            <div className="min-h-0 flex-1 overflow-auto [scrollbar-gutter:stable]">
               {children}
-            </main>
+            </div>
           </div>
         </SidebarInset>
       </div>
+      <NewNoteDialog
+        user={user}
+        isOpen={showNewNoteDialog}
+        onClose={() => setShowNewNoteDialog(false)}
+      />
+      <CommitPushDialog
+        user={user}
+        isOpen={showCommitPushDialog}
+        onClose={() => setShowCommitPushDialog(false)}
+      />
     </SidebarProvider>
   )
 }
