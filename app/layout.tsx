@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Noto_Sans } from "next/font/google";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import "./globals.css";
 
 const notoSans = Noto_Sans({
@@ -27,7 +28,7 @@ export default function RootLayout({
       <body
         className={`${notoSans.variable} antialiased`}
       >
-        {children}
+        <TooltipProvider delayDuration={300}>{children}</TooltipProvider>
       </body>
     </html>
   );

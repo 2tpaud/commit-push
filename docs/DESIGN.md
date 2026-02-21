@@ -6,21 +6,28 @@
 - **위치**: `app/(dashboard)/layout.tsx`
 - **역할**: 인증 구간을 한 번만 감싸고, 로그인 후 모든 대시보드 페이지에서 **동일한 레이아웃이 한 번만 마운트**되도록 함. 페이지 이동 시 레이아웃이 다시 로딩되지 않아 **깜빡임 없음**.
 - **동작**:
-  - 세션 확인 후, 비로그인이고 path가 `/`이면 `LoginForm`만 렌더
-  - 비로그인이고 path가 `/`가 아니면 `/`로 리다이렉트
-  - 로그인 시: `AuthUserProvider` → `CommitSheetProvider` → `SharedAppLayout` 순으로 `children` 감쌈
+  - 세션 확인 후, 비로그인 시 **공개 경로**만 허용: `/` → `LandingPage`, `/pricing` → 이용요금 페이지. 그 외 경로는 `/`로 리다이렉트.
+  - `/login` 접속 시 `app/(dashboard)/login/page.tsx`에서 `/`로 리다이렉트 (전용 로그인 페이지 없음).
+  - 로그인 시: `AuthUserProvider` → `CommitSheetProvider` → `SharedAppLayout` 순으로 `children` 감쌈.
 - **프로바이더**: 각 페이지는 `useAuthUser()`, `useCommitSheet()` 훅으로 접근.
 - **대시보드 라우트** (URL에 `(dashboard)`는 포함되지 않음):
-  - `/` → `app/(dashboard)/page.tsx` (홈)
+  - `/` → 비로그인 시 랜딩, 로그인 시 `app/(dashboard)/page.tsx` (홈)
+  - `/pricing` → `app/(dashboard)/pricing/page.tsx` (이용요금, 비로그인 공개)
   - `/activity` → `app/(dashboard)/activity/page.tsx` (작업 로그)
   - `/developer-notes` → `app/(dashboard)/developer-notes/page.tsx` (개발자 노트)
-  - `/plan` → `app/(dashboard)/plan/page.tsx` (요금제)
+  - `/plan` → `app/(dashboard)/plan/page.tsx` (요금제, 로그인 필요)
   - `/notes/[id]` → `app/(dashboard)/notes/[id]/page.tsx` (노트 상세)
   - `/notes/new` → `app/(dashboard)/notes/new/page.tsx` (새 노트)
 
-### 로그인 화면
-- **위치**: `src/components/LoginForm.tsx`
-- 비로그인 사용자가 path `/`일 때만 `(dashboard)/layout.tsx`에서 `LoginForm`을 렌더. 그 외 비로그인 경로는 `/`로 리다이렉트.
+### 랜딩 페이지 (비로그인 홈)
+- **위치**: `src/components/LandingPage.tsx`
+- **노출**: 비로그인 시 path `/`일 때 렌더.
+- **구성**: 헤더(로고+CommitPush, 서비스, 이용요금, 로그인 버튼), 본문(모토·슬로건, 지금 시작하기 버튼). **로그인**·**지금 시작하기** 클릭 시 Google OAuth 직접 호출(별도 로그인 화면 없음).
+
+### 이용요금 페이지 (비로그인 공개)
+- **위치**: `app/(dashboard)/pricing/page.tsx`
+- **노출**: 비로그인 시 `/pricing` 접근 가능.
+- **구성**: 랜딩과 동일한 헤더, 본문에 Free/Pro/Team 플랜 카드(가격·한도·특징), 하단 지금 시작하기. **로그인**·**지금 시작하기** 클릭 시 Google OAuth 직접 호출.
 
 ### 공통 레이아웃 (SharedAppLayout)
 - **위치**: `src/components/SharedAppLayout.tsx`
@@ -55,7 +62,8 @@
 
 ### 홈 화면 (로그인 후)
 - **위치**: `app/(dashboard)/page.tsx`
-- SharedAppLayout 내부: 노트 제목, 환영 문구만 표시. **커밋푸시**·**새 노트 생성**·**알림**은 헤더 우측의 아이콘(MessageCircleMore, FilePlus, Bell)으로 제공되며, 클릭 시 SharedAppLayout에서 렌더하는 NewNoteDialog / CommitPushDialog 또는 알림 드롭다운이 열림.
+- **노출**: 로그인 후 path `/`일 때 (비로그인 시 `/`는 랜딩 페이지).
+- SharedAppLayout 내부: **활동 그래프(ContributionGraph)** 한 개만 표시. 연도별·노트/커밋 활동 히트맵, 호버 시 툴팁(날짜·활동 횟수). **커밋푸시**·**새 노트 생성**·**알림**은 헤더 우측의 아이콘(MessageCircleMore, FilePlus, Bell)으로 제공되며, 클릭 시 SharedAppLayout에서 렌더하는 NewNoteDialog / CommitPushDialog 또는 알림 드롭다운이 열림.
 
 ### 요금제 페이지 (`/plan`)
 - **위치**: `app/(dashboard)/plan/page.tsx`
@@ -195,6 +203,7 @@ body {
 - **Switch** — 공유여부 토글 등
 - **Sheet** — 커밋 내역 슬라이드 패널
 - **Tabs**, **Table**
+- **Tooltip** (TooltipProvider, Tooltip, TooltipTrigger, TooltipContent) — Radix 기반, 앱 전역 툴팁. `app/layout.tsx`에 TooltipProvider 적용. 아이콘 버튼·활동 그래프 등 호버 설명에 사용.
 - **Skeleton** (로딩 플레이스홀더: `PageLoadingSkeleton`, `TablePageLoadingSkeleton`, `DialogTableSkeleton`, `DialogFormSkeleton` 활용)
 - **Sidebar** (SidebarProvider, Sidebar, SidebarContent, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarInset, SidebarTrigger) — 레이아웃·사이드바 트리
 - **Collapsible** (CollapsibleTrigger, CollapsibleContent) — 사이드바 대·중·소분류 펼침/접힘
@@ -387,3 +396,4 @@ body {
 15. **동적 가운데 정렬**: 사이드바와 커밋 내역 Sheet 상태에 따라 노트 컨테이너가 사용 가능한 공간에서 자동으로 가운데 정렬 (`useMemo`로 계산).
 16. **공유 기능**: 노트 외부 공유는 Pro/Team 플랜에서만 ON 가능. Free 시 AlertDialog로 업그레이드 유도. `is_public`이 `true`일 때 `share_token` 자동 생성, 공유 URL은 `NEXT_PUBLIC_SHARE_DOMAIN` 사용.
 17. **아이콘 사용**: 속성별로 적절한 아이콘 사용 (Calendar, Tag, LinkIcon, CircleCheck/Archive/CheckCircle2, Globe/Lock, GitBranch, FileText 등).
+18. **툴팁**: 아이콘 버튼·링크 등에는 HTML `title` 대신 shadcn **Tooltip** 사용. 활동 그래프(ContributionGraph)는 그리드 전체를 한 호버 영역으로 두고 마우스 위치로 셀을 계산해 툴팁 하나만 포탈로 표시(옆 셀 이동 시에도 끊기지 않음).

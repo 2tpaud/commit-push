@@ -38,6 +38,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { Trash2, Edit, Plus, ArrowUpDown } from 'lucide-react'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useAuthUser } from '@/components/AuthUserProvider'
 
 interface Note {
@@ -342,22 +343,28 @@ export default function ActivityPage() {
           const note = row.original
           return (
             <div className="flex gap-2">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setEditingNoteId(note.id)}
-                title="노트 수정"
-              >
-                <Edit className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => openDeleteNoteAlert(note.id)}
-                disabled={deletingNoteId === note.id}
-                title="노트 삭제"
-              >
-                {deletingNoteId === note.id ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setEditingNoteId(note.id)}
+                  >
+                    <Edit className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>노트 수정</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="inline-block">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => openDeleteNoteAlert(note.id)}
+                      disabled={deletingNoteId === note.id}
+                    >
+                      {deletingNoteId === note.id ? (
                   <svg
                     className="h-4 w-4 animate-spin"
                     fill="none"
@@ -380,7 +387,11 @@ export default function ActivityPage() {
                 ) : (
                   <Trash2 className="h-4 w-4" />
                 )}
-              </Button>
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>노트 삭제</TooltipContent>
+              </Tooltip>
             </div>
           )
         },
@@ -431,27 +442,35 @@ export default function ActivityPage() {
                 </TabsTrigger>
               </TabsList>
               {activeTab === 'notes' && (
-                <Button
-                  variant="default"
-                  size="icon"
-                  onClick={() => setShowNewNoteDialog(true)}
-                  title="새 노트 추가"
-                >
-                  <Plus className="h-4 w-4" />
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="default"
+                      size="icon"
+                      onClick={() => setShowNewNoteDialog(true)}
+                    >
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>새 노트 추가</TooltipContent>
+                </Tooltip>
               )}
               {activeTab === 'commits' && (
-                <Button
-                  variant="default"
-                  size="icon"
-                  onClick={() => {
-                    setEditingCommitId(null)
-                    setShowCommitPushDialog(true)
-                  }}
-                  title="커밋푸시 작성"
-                >
-                  <Plus className="h-4 w-4" />
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="default"
+                      size="icon"
+                      onClick={() => {
+                        setEditingCommitId(null)
+                        setShowCommitPushDialog(true)
+                      }}
+                    >
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>커밋푸시 작성</TooltipContent>
+                </Tooltip>
               )}
             </div>
 
@@ -610,26 +629,34 @@ export default function ActivityPage() {
                           </TableCell>
                           <TableCell className="w-24">
                             <div className="flex items-center gap-1">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => {
-                                  setShowCommitPushDialog(false)
-                                  setEditingCommitId(commit.id)
-                                }}
-                                title="커밋 수정"
-                              >
-                                <Edit className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => openDeleteCommitAlert(commit.id)}
-                                disabled={deletingCommitId === commit.id}
-                                title="커밋 삭제"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => {
+                                      setShowCommitPushDialog(false)
+                                      setEditingCommitId(commit.id)
+                                    }}
+                                  >
+                                    <Edit className="h-4 w-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>커밋 수정</TooltipContent>
+                              </Tooltip>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => openDeleteCommitAlert(commit.id)}
+                                    disabled={deletingCommitId === commit.id}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>커밋 삭제</TooltipContent>
+                              </Tooltip>
                             </div>
                           </TableCell>
                         </TableRow>

@@ -14,7 +14,7 @@ shadcn/ui
 
 ### Authentication
 
-Supabase Auth (Google OAuth)
+Supabase Auth (Google OAuth). 공개 라우트: `/`(랜딩), `/pricing`(이용요금). `/login`은 `/`로 리다이렉트. 랜딩·이용요금에서 로그인/지금 시작하기 클릭 시 Google OAuth 직접 호출.
 
 ### Operational Database
 
@@ -24,9 +24,7 @@ Supabase (PostgreSQL)
 
 ### File Handling
 
-사용자 Google Drive 연동
-
-DB에는 파일 메타데이터만 저장
+Google Drive 연동은 UI placeholder만 있으며, 실제 연동·DB 파일 메타데이터 저장은 향후 구현 예정.
 
 ### Analytics (향후)
 
@@ -35,10 +33,13 @@ BigQuery 기반 실행 분석 시스템
 ### API (Next.js Route Handlers)
 
 - **`/api/plan/check-expiry`**: 대시보드 진입·로그인 시 호출. `plan_expires_at`이 지난 유료 플랜 사용자를 `plan = 'free'`로 갱신.
+- **`/api/payment/config`**: GET — 결제창용 `clientId` 반환 (클라이언트에서 나이스페이 SDK 전 환경 변수 노출 없이 조회).
 - **`/api/payment/create`**: 나이스페이 주문 생성 후 결제창 호출용 `orderId`, `amount`, `goodsName` 반환.
 - **`/api/payment/return`**: 결제 완료 후 콜백. 승인 API 호출 후 `payments` 갱신, `users.plan` / `users.plan_expires_at` 반영, `notifications`에 결제 완료 알림 삽입.
-- **`/api/payment/webhook`**: 나이스페이 웹훅(결제 승인 시). 서명 검증 후 미처리 건만 승인 API 호출·DB 갱신, `notifications` 삽입. 응답 `Content-Type: text/html`, body `OK`.
+- **`/api/payment/webhook`**: 나이스페이 웹훅(결제 승인 시). GET/HEAD/OPTIONS는 URL 등록 검증용 200 반환. POST: 서명 검증 후 미처리 건만 승인 API 호출·DB 갱신, `notifications` 삽입. 응답 `Content-Type: text/html`, body `OK`.
 - **`/api/notifications`**: GET — 로그인 사용자 알림 목록. PATCH `/api/notifications/[id]/read` — 읽음 처리.
+- **`/api/activity`**: GET — 연도별 활동 집계(`year` 쿼리). 홈 활동 그래프(ContributionGraph)에서 노트/커밋 일별 횟수 조회.
+- **`/api/docs/[slug]`**: GET — 문서 원문 조회. `slug`는 `architecture` | `database` | `design` | `plan` | `product` 중 하나. 개발자 노트 등에서 docs 마크다운 로드 시 사용.
 
 ### Deployment
 

@@ -43,6 +43,9 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Trash2, Edit, Plus, ArrowUpDown } from 'lucide-react'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { useAuthUser } from '@/components/AuthUserProvider'
 
 interface DeveloperNote {
@@ -51,6 +54,63 @@ interface DeveloperNote {
   content: string
   created_at: string
   updated_at: string
+}
+
+const DOC_TABS = [
+  { value: 'product', label: '프로덕트' },
+  { value: 'architecture', label: '아키텍처' },
+  { value: 'database', label: '데이터베이스' },
+  { value: 'design', label: '디자인' },
+  { value: 'plan', label: '플랜' },
+] as const
+
+const markdownProseClass =
+  'rounded-md border border-border bg-muted/50 p-6 text-sm text-foreground [&_ul]:list-inside [&_ul]:list-disc [&_ol]:list-inside [&_ol]:list-decimal [&_pre]:overflow-x-auto [&_pre]:rounded [&_pre]:bg-muted [&_pre]:p-2 [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_h1]:text-2xl [&_h2]:text-xl [&_h3]:text-lg [&_h1,_h2,_h3]:font-semibold [&_h1,_h2,_h3]:mt-4 [&_h1]:mt-0 [&_p]:my-2 [&_p:first-child]:mt-0 [&_p:last-child]:mb-0 [&_table]:border-collapse [&_th,_td]:border [&_th,_td]:border-border [&_th,_td]:px-3 [&_th,_td]:py-2 [&_th]:bg-muted'
+
+function DocTabContent({ slug }: { slug: string }) {
+  const [content, setContent] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    setLoading(true)
+    setError(null)
+    fetch(`/api/docs/${slug}`)
+      .then((res) => {
+        if (!res.ok) throw new Error(res.status === 404 ? '문서를 찾을 수 없습니다.' : '로드 실패')
+        return res.json()
+      })
+      .then((data: { content: string }) => setContent(data.content ?? ''))
+      .catch((err: Error) => setError(err.message))
+      .finally(() => setLoading(false))
+  }, [slug])
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center rounded-lg border bg-card p-12">
+        <p className="text-muted-foreground">로딩 중...</p>
+      </div>
+    )
+  }
+  if (error) {
+    return (
+      <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-6 text-destructive">
+        {error}
+      </div>
+    )
+  }
+  if (!content) {
+    return (
+      <div className="rounded-lg border bg-card p-8 text-center text-muted-foreground">
+        내용이 없습니다.
+      </div>
+    )
+  }
+  return (
+    <div className={`overflow-y-auto ${markdownProseClass}`}>
+      <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+    </div>
+  )
 }
 
 export default function DeveloperNotesPage() {
@@ -69,6 +129,7 @@ export default function DeveloperNotesPage() {
   const [content, setContent] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [sorting, setSorting] = useState<SortingState>([{ id: 'updated_at', desc: true }])
+  const [activeTab, setActiveTab] = useState('notes')
 
   useEffect(() => {
     if (!user) return
@@ -295,27 +356,33 @@ export default function DeveloperNotesPage() {
           const note = row.original
           return (
             <div className="flex gap-2">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  handleEdit(note)
-                }}
-                title="노트 수정"
-              >
-                <Edit className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  openDeleteAlert(note.id)
-                }}
-                disabled={deletingNoteId === note.id}
-                title="노트 삭제"
-              >
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleEdit(note)
+                    }}
+                  >
+                    <Edit className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>노트 수정</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="inline-block">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        openDeleteAlert(note.id)
+                      }}
+                      disabled={deletingNoteId === note.id}
+                    >
                 {deletingNoteId === note.id ? (
                   <svg
                     className="h-4 w-4 animate-spin"
@@ -339,7 +406,11 @@ export default function DeveloperNotesPage() {
                 ) : (
                   <Trash2 className="h-4 w-4" />
                 )}
-              </Button>
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>노트 삭제</TooltipContent>
+              </Tooltip>
             </div>
           )
         },
@@ -376,21 +447,32 @@ export default function DeveloperNotesPage() {
           개발자 노트
         </h2>
 
-        <Tabs defaultValue="notes" className="mb-6">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-6">
           <div className="mb-4 flex items-center justify-between">
-            <TabsList>
+            <TabsList className="flex flex-wrap h-auto gap-1">
               <TabsTrigger value="notes">
                 작업 내역 ({notes.length})
               </TabsTrigger>
+              {DOC_TABS.map((tab) => (
+                <TabsTrigger key={tab.value} value={tab.value}>
+                  {tab.label}
+                </TabsTrigger>
+              ))}
             </TabsList>
-            <Button
-              variant="default"
-              size="icon"
-              onClick={handleCreate}
-              title="새 노트 작성"
-            >
-              <Plus className="h-4 w-4" />
-            </Button>
+            {activeTab === 'notes' && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="default"
+                    size="icon"
+                    onClick={handleCreate}
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>새 노트 작성</TooltipContent>
+              </Tooltip>
+            )}
           </div>
 
           <TabsContent value="notes">
@@ -463,6 +545,11 @@ export default function DeveloperNotesPage() {
               </div>
             )}
           </TabsContent>
+          {DOC_TABS.map((tab) => (
+            <TabsContent key={tab.value} value={tab.value}>
+              <DocTabContent slug={tab.value} />
+            </TabsContent>
+          ))}
         </Tabs>
       </div>
 
@@ -546,8 +633,8 @@ export default function DeveloperNotesPage() {
                 </div>
                 <div>
                   <Label className="text-xs text-muted-foreground">내용</Label>
-                  <div className="mt-2 whitespace-pre-wrap font-mono text-sm text-foreground bg-muted p-4 rounded-md">
-                    {viewingNote.content}
+                  <div className="mt-2 rounded-md border border-border bg-muted/50 p-4 text-sm text-foreground [&_ul]:list-inside [&_ul]:list-disc [&_ol]:list-inside [&_ol]:list-decimal [&_pre]:overflow-x-auto [&_pre]:rounded [&_pre]:bg-muted [&_pre]:p-2 [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_h1]:text-xl [&_h2]:text-lg [&_h3]:text-base [&_h1,_h2,_h3]:font-semibold [&_h1,_h2,_h3]:mt-3 [&_h1]:mt-0 [&_p]:my-2 [&_p:first-child]:mt-0 [&_p:last-child]:mb-0">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{viewingNote.content}</ReactMarkdown>
                   </div>
                 </div>
               </div>

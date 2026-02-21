@@ -6,7 +6,7 @@ import type { User } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabaseClient'
 import PageLoadingSkeleton from '@/components/PageLoadingSkeleton'
 import SharedAppLayout from '@/components/SharedAppLayout'
-import LoginForm from '@/components/LoginForm'
+import LandingPage from '@/components/LandingPage'
 import { AuthUserProvider } from '@/components/AuthUserProvider'
 import { CommitSheetProvider } from '@/components/CommitSheetProvider'
 
@@ -56,16 +56,20 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
   }, [])
 
+  const publicPaths = ['/', '/login', '/pricing']
+  const isPublicPath = publicPaths.includes(pathname)
+
   useEffect(() => {
     if (loading) return
-    if (!user && pathname !== '/') {
+    if (!user && !isPublicPath) {
       router.replace('/')
     }
-  }, [loading, user, pathname, router])
+  }, [loading, user, pathname, isPublicPath, router])
 
   if (loading) return <PageLoadingSkeleton />
   if (!user) {
-    if (pathname === '/') return <LoginForm />
+    if (pathname === '/') return <LandingPage />
+    if (pathname === '/pricing') return children
     return null
   }
 

@@ -17,6 +17,7 @@ import {
   CollapsibleTrigger,
 } from '@/components/ui/collapsible'
 import { ChevronRight, ChevronDown, ChevronUp, FileText, Search, LayoutDashboard, ScrollText, BookOpen } from 'lucide-react'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 
 type SidebarView = 'tree' | 'search' | 'dashboard'
@@ -206,60 +207,80 @@ export default function AppSidebar({ userId }: { userId: string }) {
       <SidebarContent ref={sidebarContentRef} className="flex flex-col min-h-0 p-0">
         {/* 뷰 전환: 홈 CommitPush 로고와 동일 선상(h-14) + 라인 정렬 */}
         <div className="flex h-14 shrink-0 items-center gap-1 border-b border-border px-2">
-          <button
-            type="button"
-            onClick={() => setSidebarView('tree')}
-            className={cn(
-              iconButtonClass,
-              sidebarView === 'tree' && 'bg-gray-100 text-[#1F2A44] dark:bg-gray-800'
-            )}
-            title="노트 분류 트리"
-            aria-label="노트 분류 트리"
-          >
-            <FileText className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            onClick={() => setSidebarView('search')}
-            className={cn(
-              iconButtonClass,
-              sidebarView === 'search' && 'bg-gray-100 text-[#1F2A44] dark:bg-gray-800'
-            )}
-            title="제목·태그 검색"
-            aria-label="제목·태그 검색"
-          >
-            <Search className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            onClick={() => setSidebarView('dashboard')}
-            className={cn(
-              iconButtonClass,
-              sidebarView === 'dashboard' && 'bg-gray-100 text-[#1F2A44] dark:bg-gray-800'
-            )}
-            title="대시보드 메뉴"
-            aria-label="대시보드 메뉴"
-          >
-            <LayoutDashboard className="h-4 w-4" />
-          </button>
-          <Link
-            href="/activity"
-            className={cn(iconButtonClass)}
-            title="작업 로그"
-            aria-label="작업 로그"
-            prefetch
-          >
-            <ScrollText className="h-4 w-4" />
-          </Link>
-          <Link
-            href="/developer-notes"
-            className={cn(iconButtonClass)}
-            title="개발자 노트"
-            aria-label="개발자 노트"
-            prefetch
-          >
-            <BookOpen className="h-4 w-4" />
-          </Link>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={() => setSidebarView('tree')}
+                className={cn(
+                  iconButtonClass,
+                  sidebarView === 'tree' && 'bg-gray-100 text-[#1F2A44] dark:bg-gray-800'
+                )}
+                aria-label="노트 분류 트리"
+              >
+                <FileText className="h-4 w-4" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>노트 분류 트리</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={() => setSidebarView('search')}
+                className={cn(
+                  iconButtonClass,
+                  sidebarView === 'search' && 'bg-gray-100 text-[#1F2A44] dark:bg-gray-800'
+                )}
+                aria-label="제목·태그 검색"
+              >
+                <Search className="h-4 w-4" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>제목·태그 검색</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={() => setSidebarView('dashboard')}
+                className={cn(
+                  iconButtonClass,
+                  sidebarView === 'dashboard' && 'bg-gray-100 text-[#1F2A44] dark:bg-gray-800'
+                )}
+                aria-label="대시보드 메뉴"
+              >
+                <LayoutDashboard className="h-4 w-4" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>대시보드 메뉴</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Link
+                href="/activity"
+                className={cn(iconButtonClass)}
+                aria-label="작업 로그"
+                prefetch
+              >
+                <ScrollText className="h-4 w-4" />
+              </Link>
+            </TooltipTrigger>
+            <TooltipContent>작업 로그</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Link
+                href="/developer-notes"
+                className={cn(iconButtonClass)}
+                aria-label="개발자 노트"
+                prefetch
+              >
+                <BookOpen className="h-4 w-4" />
+              </Link>
+            </TooltipTrigger>
+            <TooltipContent>개발자 노트</TooltipContent>
+          </Tooltip>
         </div>
 
         {/* 메인 영역: 트리 / 검색 / 대시보드 */}
@@ -480,19 +501,23 @@ export default function AppSidebar({ userId }: { userId: string }) {
             <p className="text-xs font-semibold text-[#1F2A44]">
               최근 항목
             </p>
-            <button
-              type="button"
-              onClick={handleToggleRatio}
-              className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-[#1F2A44] hover:bg-accent hover:text-[#1F2A44] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-colors"
-              title={isExpanded ? "최소 범위로 축소" : "최대 범위로 확대"}
-              aria-label={isExpanded ? "최근 항목 영역을 최소 범위로 축소" : "최근 항목 영역을 최대 범위로 확대"}
-            >
-              {isExpanded ? (
-                <ChevronDown className="h-3.5 w-3.5" />
-              ) : (
-                <ChevronUp className="h-3.5 w-3.5" />
-              )}
-            </button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={handleToggleRatio}
+                  className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-[#1F2A44] hover:bg-accent hover:text-[#1F2A44] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-colors"
+                  aria-label={isExpanded ? "최근 항목 영역을 최소 범위로 축소" : "최근 항목 영역을 최대 범위로 확대"}
+                >
+                  {isExpanded ? (
+                    <ChevronDown className="h-3.5 w-3.5" />
+                  ) : (
+                    <ChevronUp className="h-3.5 w-3.5" />
+                  )}
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>{isExpanded ? "최소 범위로 축소" : "최대 범위로 확대"}</TooltipContent>
+            </Tooltip>
           </div>
           <div className="overflow-y-auto flex-1 min-h-0 pb-2">
             {recentNotes.length === 0 ? (

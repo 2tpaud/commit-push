@@ -10,6 +10,7 @@ import { useSidebar } from '@/components/ui/sidebar'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
 import { MessageCircleMore, X, Calendar, Tag, Link as LinkIcon, ArrowUp, ArrowDown, CircleCheck, Archive, CheckCircle2, Globe, Lock, GitBranch, FileText, ArrowLeft, Copy, Check } from 'lucide-react'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   Sheet,
   SheetContent,
@@ -359,23 +360,27 @@ export default function NoteDetailPage() {
             modal={false}
           >
             <SheetTrigger asChild>
-              <button
-                type="button"
-                className="flex flex-col items-center justify-center gap-1 rounded-md text-[#1F2A44] hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                title="커밋 내역"
-                aria-label={isOpen ? "커밋 내역 닫기" : "커밋 내역 열기"}
-                onClick={(e) => {
-                  e.preventDefault()
-                  if (isOpen) {
-                    closeSheet()
-                  } else {
-                    openSheet()
-                  }
-                }}
-              >
-                <MessageCircleMore className="h-5 w-5" aria-hidden />
-                <span className="text-xs font-medium">{note.commit_count || 0}</span>
-              </button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    className="flex flex-col items-center justify-center gap-1 rounded-md text-[#1F2A44] hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    aria-label={isOpen ? "커밋 내역 닫기" : "커밋 내역 열기"}
+                    onClick={(e) => {
+                      e.preventDefault()
+                      if (isOpen) {
+                        closeSheet()
+                      } else {
+                        openSheet()
+                      }
+                    }}
+                  >
+                    <MessageCircleMore className="h-5 w-5" aria-hidden />
+                    <span className="text-xs font-medium">{note.commit_count || 0}</span>
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>커밋 내역</TooltipContent>
+              </Tooltip>
             </SheetTrigger>
             <SheetContent 
               side="right"
@@ -387,18 +392,22 @@ export default function NoteDetailPage() {
                 <div className="flex items-center justify-between">
                   <SheetTitle>커밋 내역</SheetTitle>
                   <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
-                      className="flex items-center gap-1 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-                      title={sortOrder === 'asc' ? '내림차순 정렬' : '오름차순 정렬'}
-                    >
-                      {sortOrder === 'desc' ? (
-                        <ArrowDown className="h-4 w-4" />
-                      ) : (
-                        <ArrowUp className="h-4 w-4" />
-                      )}
-                    </button>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+                          className="flex items-center gap-1 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                        >
+                          {sortOrder === 'desc' ? (
+                            <ArrowDown className="h-4 w-4" />
+                          ) : (
+                            <ArrowUp className="h-4 w-4" />
+                          )}
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent>{sortOrder === 'asc' ? '내림차순 정렬' : '오름차순 정렬'}</TooltipContent>
+                    </Tooltip>
                     <button
                       type="button"
                       onClick={closeSheet}
@@ -568,25 +577,29 @@ export default function NoteDetailPage() {
                   return `${shareDomain}/notes/shared/${note.share_token}`
                 })()}
               </span>
-              <button
-                type="button"
-                onClick={async () => {
-                  if (typeof window === 'undefined') return
-                  const shareDomain = process.env.NEXT_PUBLIC_SHARE_DOMAIN || window.location.origin
-                  const shareUrl = `${shareDomain}/notes/shared/${note.share_token}`
-                  await navigator.clipboard.writeText(shareUrl)
-                  setCopied(true)
-                  setTimeout(() => setCopied(false), 2000)
-                }}
-                className="shrink-0 rounded-sm p-1 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-                title="링크 복사"
-              >
-                {copied ? (
-                  <Check className="h-4 w-4 text-green-600" />
-                ) : (
-                  <Copy className="h-4 w-4" />
-                )}
-              </button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (typeof window === 'undefined') return
+                      const shareDomain = process.env.NEXT_PUBLIC_SHARE_DOMAIN || window.location.origin
+                      const shareUrl = `${shareDomain}/notes/shared/${note.share_token}`
+                      await navigator.clipboard.writeText(shareUrl)
+                      setCopied(true)
+                      setTimeout(() => setCopied(false), 2000)
+                    }}
+                    className="shrink-0 rounded-sm p-1 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                  >
+                    {copied ? (
+                      <Check className="h-4 w-4 text-green-600" />
+                    ) : (
+                      <Copy className="h-4 w-4" />
+                    )}
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>링크 복사</TooltipContent>
+              </Tooltip>
             </div>
           </div>
         )}

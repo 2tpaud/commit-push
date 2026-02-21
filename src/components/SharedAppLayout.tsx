@@ -23,6 +23,7 @@ import {
 } from './ui/dropdown-menu'
 import { Badge } from './ui/badge'
 import { SidebarProvider, SidebarInset, SidebarTrigger } from './ui/sidebar'
+import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 
 interface SharedAppLayoutProps {
   user: User
@@ -208,26 +209,34 @@ export default function SharedAppLayout({ user, children }: SharedAppLayoutProps
                   </h1>
                 </div>
                 <div className="flex items-center gap-1 sm:gap-1.5">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="shrink-0 text-[#1F2A44] hover:bg-gray-100 hover:text-[#1F2A44] dark:hover:bg-gray-800"
-                    onClick={() => setShowCommitPushDialog(true)}
-                    title="커밋푸시"
-                    aria-label="커밋푸시"
-                  >
-                    <MessageCircleMore className="h-5 w-5" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="shrink-0 text-[#1F2A44] hover:bg-gray-100 hover:text-[#1F2A44] dark:hover:bg-gray-800"
-                    onClick={() => setShowNewNoteDialog(true)}
-                    title="새 노트 생성"
-                    aria-label="새 노트 생성"
-                  >
-                    <FilePlus className="h-5 w-5" />
-                  </Button>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="shrink-0 text-[#1F2A44] hover:bg-gray-100 hover:text-[#1F2A44] dark:hover:bg-gray-800"
+                        onClick={() => setShowCommitPushDialog(true)}
+                        aria-label="커밋푸시"
+                      >
+                        <MessageCircleMore className="h-5 w-5" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>커밋푸시</TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="shrink-0 text-[#1F2A44] hover:bg-gray-100 hover:text-[#1F2A44] dark:hover:bg-gray-800"
+                        onClick={() => setShowNewNoteDialog(true)}
+                        aria-label="새 노트 생성"
+                      >
+                        <FilePlus className="h-5 w-5" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>새 노트 생성</TooltipContent>
+                  </Tooltip>
                   <DropdownMenu open={notificationOpen} onOpenChange={(open) => {
                     setNotificationOpen(open)
                     if (open) {
@@ -242,7 +251,6 @@ export default function SharedAppLayout({ user, children }: SharedAppLayoutProps
                         variant="ghost"
                         size="icon"
                         className="relative shrink-0 text-[#1F2A44] hover:bg-gray-100 hover:text-[#1F2A44] dark:hover:bg-gray-800"
-                        title="알림"
                         aria-label="알림"
                       >
                         <Bell className="h-5 w-5" />
