@@ -19,7 +19,9 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
-import { Plus, Trash2, Paperclip, X } from 'lucide-react'
+import { Plus, Trash2, Paperclip, X, FolderOpen } from 'lucide-react'
+import DrivePickerDialog from './DrivePickerDialog'
+import { getDrivePickerLastFolderId, setDrivePickerLastFolderId } from '@/lib/googleDrivePicker'
 
 interface AttachmentEntry {
   name: string
@@ -53,7 +55,15 @@ export default function CommitPushDialog({
   const [submitting, setSubmitting] = useState(false)
   const [showNoteSearchDialog, setShowNoteSearchDialog] = useState(false)
   const [loadingCommit, setLoadingCommit] = useState(false)
+  const [lastPickerFolderId, setLastPickerFolderId] = useState<string | null>(null)
+  const [showDrivePickerDialog, setShowDrivePickerDialog] = useState(false)
+  /** 피커를 열 때마다 그 시점의 시작 폴더를 고정해서 전달 (루트/마지막 경로 혼선 방지) */
+  const [pickerStartFolderId, setPickerStartFolderId] = useState<string | undefined>(undefined)
   const showSkeleton = useSkeletonTiming(loadingCommit, { delayBeforeShow: 100, minShowMs: 280 })
+
+  useEffect(() => {
+    setLastPickerFolderId((prev) => prev ?? getDrivePickerLastFolderId())
+  }, [])
 
   const toDatetimeLocal = (iso: string) => {
     const d = new Date(iso)
@@ -146,6 +156,12 @@ export default function CommitPushDialog({
 
   const handleAddAttachmentLink = () => {
     setAttachments((prev) => [...prev, { name: '', web_view_link: '' }])
+  }
+
+  const handleOpenGoogleDrivePicker = () => {
+    const startId = lastPickerFolderId ?? getDrivePickerLastFolderId() ?? undefined
+    setPickerStartFolderId(startId)
+    setShowDrivePickerDialog(true)
   }
 
   const handleRemoveAttachment = (index: number) => {
@@ -264,7 +280,12 @@ export default function CommitPushDialog({
 
   return (
     <>
-      <Dialog open={isOpen} onOpenChange={(open) => !open && !submitting && handleClose()}>
+      <Dialog
+        open={isOpen}
+        onOpenChange={(open) => {
+          if (!open && !submitting) handleClose()
+        }}
+      >
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{commitId ? '커밋푸시 수정' : '커밋푸시'}</DialogTitle>
@@ -422,19 +443,28 @@ export default function CommitPushDialog({
                     <h3 className="text-sm font-medium text-foreground">첨부파일</h3>
                   </div>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Google Drive 연동 후 파일 업로드가 가능합니다. 링크가 있다면 아래에서
-                    추가할 수 있습니다.
+                    구글 드라이브에서 폴더·파일을 선택하거나, 링크를 직접 입력할 수 있습니다.
                   </p>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={handleAddAttachmentLink}
-                    className="mt-2"
-                  >
-                    <Plus className="mr-1 h-3 w-3" />
-                    링크 추가
-                  </Button>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleOpenGoogleDrivePicker}
+                    >
+                      <FolderOpen className="mr-1 h-3 w-3" />
+                      구글 드라이브에서 선택
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleAddAttachmentLink}
+                    >
+                      <Plus className="mr-1 h-3 w-3" />
+                      링크 추가
+                    </Button>
+                  </div>
                   {attachments.length > 0 && (
                     <div className="mt-2 space-y-2">
                       {attachments.map((att, index) => (
@@ -506,6 +536,33 @@ export default function CommitPushDialog({
         isOpen={showNoteSearchDialog}
         onClose={() => setShowNoteSearchDialog(false)}
         onSelect={handleNoteSelect}
+      />
+      <DrivePickerDialog
+        isOpen={showDrivePickerDialog}
+        onClose={(lastViewedFolderId) => {
+          if (lastViewedFolderId != null) {
+            if (lastViewedFolderId) {
+              setLastPickerFolderId(lastViewedFolderId)
+              setDrivePickerLastFolderId(lastViewedFolderId)
+              setPickerStartFolderId(lastViewedFolderId)
+            }
+          } else {
+            setLastPickerFolderId(null)
+            setDrivePickerLastFolderId(null)
+            setPickerStartFolderId(undefined)
+          }
+          setShowDrivePickerDialog(false)
+        }}
+        onSelect={(files, parentFolderId) => {
+          setAttachments((prev) => [...prev, ...files])
+          if (parentFolderId) {
+            setLastPickerFolderId(parentFolderId)
+            setDrivePickerLastFolderId(parentFolderId)
+            setPickerStartFolderId(parentFolderId)
+          }
+          setShowDrivePickerDialog(false)
+        }}
+        startFolderId={pickerStartFolderId}
       />
     </>
   )

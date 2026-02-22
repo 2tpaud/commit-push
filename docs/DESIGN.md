@@ -57,13 +57,13 @@
     - 작을 때(≤20%): 위쪽 화살표(`ChevronUp`) → 클릭 시 최대 범위(50%)로 확대
     - 클 때(>20%): 아래쪽 화살표(`ChevronDown`) → 클릭 시 기본값(20%)으로 축소
   - 상태 유지: localStorage에 저장되어 페이지 이동 후에도 크기 유지
-  - 구분선(`border-t`) + 고정 라벨 "최근 항목" + 최근 수정일 순 노트 제목 목록 (스크롤)
+  - 구분선(`border-t`) + 고정 라벨 "최근 항목" + **수정일·열어본 시각 중 더 최근 기준** 정렬 노트 제목 목록 (스크롤). 노트 저장/수정·탭 포커스 시 목록 재조회로 제목·순서 갱신. `data-keep-sheet-open`으로 커밋 내역 시트가 열린 상태에서도 사이드바/최근 항목 클릭 시 시트 유지.
 - **정렬**: SidebarContent에 `p-0` 적용해 아이콘 행이 헤더와 높이·라인 정렬
 
 ### 홈 화면 (로그인 후)
 - **위치**: `app/(dashboard)/page.tsx`
 - **노출**: 로그인 후 path `/`일 때 (비로그인 시 `/`는 랜딩 페이지).
-- SharedAppLayout 내부: **활동 그래프(ContributionGraph)** 한 개만 표시. 연도별·노트/커밋 활동 히트맵, 호버 시 툴팁(날짜·활동 횟수). **커밋푸시**·**새 노트 생성**·**알림**은 헤더 우측의 아이콘(MessageCircleMore, FilePlus, Bell)으로 제공되며, 클릭 시 SharedAppLayout에서 렌더하는 NewNoteDialog / CommitPushDialog 또는 알림 드롭다운이 열림.
+- SharedAppLayout 내부: **활동 그래프(ContributionGraph)** 한 개만 표시. 연도별·노트/커밋 활동 히트맵, 호버 시 툴팁(날짜·활동 횟수). 로딩 중에는 Skeleton으로 플레이스홀더 표시. **커밋푸시**·**새 노트 생성**·**알림**은 헤더 우측의 아이콘(MessageCircleMore, FilePlus, Bell)으로 제공되며, 클릭 시 SharedAppLayout에서 렌더하는 NewNoteDialog / CommitPushDialog 또는 알림 드롭다운이 열림.
 
 ### 요금제 페이지 (`/plan`)
 - **위치**: `app/(dashboard)/plan/page.tsx`
@@ -91,12 +91,10 @@
   - 공유URL: `is_public`이 `true`이고 `share_token`이 있을 때만 표시, 복사 버튼 포함
 - **커밋 내역 Sheet**:
   - 위치: 우측 슬라이드 패널 (`Sheet` 컴포넌트)
-  - 트리거: 타이틀 우측의 커밋 내역 아이콘 클릭
+  - 트리거: 타이틀 우측의 커밋 내역 아이콘 클릭 (토글)
   - 상태 관리: `CommitSheetProvider`로 전역 상태 관리 (페이지 이동 시에도 열림 상태 유지)
-  - 기능:
-    - 정렬: `ArrowUp`/`ArrowDown` 아이콘으로 `created_at` 기준 오름/내림차순 정렬
-    - 커밋 카드: 날짜(좌측 상단, 볼드), 제목, 시간(우측 상단), 메시지
-    - 닫기: 커스텀 닫기 버튼 (외부 클릭/ESC로 닫히지 않음)
+  - 닫기: **노트 본문·오버레이 클릭 시 닫힘**. **사이드바·최근 항목** 클릭 시에는 `onInteractOutside`에서 `data-keep-sheet-open` 영역이면 `preventDefault`로 시트 유지(다른 노트로 이동해도 시트는 열린 채 유지, 노트 영역 클릭 전까지).
+  - 기능: 정렬(오름/내림차순), 커밋 카드(날짜·제목·시간·메시지·첨부파일 링크), 커스텀 닫기 버튼. ESC는 닫히지 않음.
 - **설명**: `whitespace-pre-wrap`로 줄바꿈 유지
 - **연관 노트**:
   - 제목: `GitBranch` 아이콘 + "연관 노트"
@@ -286,7 +284,7 @@ body {
 - 너비: 데스크톱 `384px`, 모바일 `75vw`
 - 배경: `bg-white` (다크모드: `bg-black`)
 - 오버레이: 기본 Radix UI 오버레이 사용
-- 닫기 동작: 외부 클릭/ESC로 닫히지 않음 (`onInteractOutside`, `onEscapeKeyDown` preventDefault)
+- 닫기 동작: 노트 본문·오버레이 클릭 시 닫힘. 사이드바/최근 항목(`data-keep-sheet-open`) 클릭 시 시트 유지. ESC로는 닫히지 않음.
 - 헤더: 제목 + 정렬 버튼 + 닫기 버튼
 - 내용: 커밋 카드 목록 (스크롤 가능)
 
@@ -368,6 +366,13 @@ body {
 - **표시 위치**: 노트 상세 페이지의 공유여부 속성 아래
 - **복사 기능**: 복사 버튼 클릭 시 클립보드에 복사, 성공 시 체크 아이콘 표시
 
+## 첨부파일 (커밋푸시)
+
+- **추가정보입력** 펼침 시 **첨부파일** 섹션: **구글 드라이브에서 선택** 버튼(앱 내 DrivePickerDialog, Drive API v3 `files.list`로 경로·폴더·파일 탐색·다중 선택)과 **링크 추가**(수동 URL 입력) 제공. 파일 업로드가 아니라 **선택한 파일의 링크만** 저장하는 구조라, 여러 사용자가 각자 본인 Drive에서 선택해 사용 가능(확장성 있음).
+- **저장**: `commits.attachments`(jsonb)에 `{ name, web_view_link }[]` 형태로만 저장. 서버에 파일을 올리지 않음.
+- **커밋 내역**: 노트 상세의 커밋 내역 Sheet에서 각 커밋 카드에 첨부파일이 있으면 Paperclip 아이콘과 함께 파일명 링크 목록 표시. **파일명 클릭 시** `web_view_link`(구글 드라이브 뷰 등)로 새 탭에서 열림(랜딩).
+- **환경**: `NEXT_PUBLIC_GOOGLE_CLIENT_ID`는 **앱 배포용** OAuth 클라이언트 ID(사용자별 아님). 상세는 [ARCHITECTURE.md](./ARCHITECTURE.md) 참고.
+
 ## 디자인 원칙
 
 1. **미니멀리즘**: 불필요한 장식 제거
@@ -392,8 +397,9 @@ body {
 11. **사이드바**: 상단 아이콘 행은 헤더와 `h-14`·`border-b` 정렬; 하단 "최근 항목" 영역은 기본 1/5 비율이며 드래그로 조절 가능(최소 20%, 최대 50%), localStorage로 상태 유지.
 12. **탭 컬러**: 활성/비활성 탭 모두 시그니처 컬러(`#1F2A44`) 텍스트 사용.
 13. **노트 상세 페이지**: 속성 섹션은 아이콘 + 속성명 + 콜론 + 값 형식으로 일관되게 표시. 속성명은 고정 폭(`w-24`)으로 값이 같은 위치에 정렬.
-14. **커밋 내역 Sheet**: `CommitSheetProvider`로 전역 상태 관리하여 페이지 이동 시에도 열림 상태 유지. 외부 클릭/ESC로 닫히지 않도록 설정.
+14. **커밋 내역 Sheet**: `CommitSheetProvider`로 전역 상태 관리하여 페이지 이동 시에도 열림 상태 유지. **노트 본문·오버레이 클릭 시에만** 닫힘. 사이드바·최근 항목(`data-keep-sheet-open`) 클릭 시에는 시트 유지. ESC로는 닫히지 않음.
 15. **동적 가운데 정렬**: 사이드바와 커밋 내역 Sheet 상태에 따라 노트 컨테이너가 사용 가능한 공간에서 자동으로 가운데 정렬 (`useMemo`로 계산).
 16. **공유 기능**: 노트 외부 공유는 Pro/Team 플랜에서만 ON 가능. Free 시 AlertDialog로 업그레이드 유도. `is_public`이 `true`일 때 `share_token` 자동 생성, 공유 URL은 `NEXT_PUBLIC_SHARE_DOMAIN` 사용.
 17. **아이콘 사용**: 속성별로 적절한 아이콘 사용 (Calendar, Tag, LinkIcon, CircleCheck/Archive/CheckCircle2, Globe/Lock, GitBranch, FileText 등).
 18. **툴팁**: 아이콘 버튼·링크 등에는 HTML `title` 대신 shadcn **Tooltip** 사용. 활동 그래프(ContributionGraph)는 그리드 전체를 한 호버 영역으로 두고 마우스 위치로 셀을 계산해 툴팁 하나만 포탈로 표시(옆 셀 이동 시에도 끊기지 않음).
+19. **첨부파일**: 커밋푸시 다이얼로그에서 구글 드라이브 선택 또는 링크 추가. 커밋 내역에서는 파일명을 `web_view_link`로 여는 링크로 표시(새 탭).

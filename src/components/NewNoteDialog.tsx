@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../lib/supabaseClient'
 import { getLimitsForPlan } from '../lib/planLimits'
+import { notifySidebarNotesRefresh } from '@/lib/sidebarRecentOpened'
 import type { User } from '@supabase/supabase-js'
 import RelatedNoteSearchDialog from './RelatedNoteSearchDialog'
 import {
@@ -800,6 +801,7 @@ export default function NewNoteDialog({
     setRelatedNoteInput('')
 
     setSubmitting(false)
+    notifySidebarNotesRefresh()
     onClose()
     if (onSuccess) {
       onSuccess()

@@ -6,10 +6,11 @@ import Link from 'next/link'
 import { supabase } from '@/lib/supabaseClient'
 import { useAuthUser } from '@/components/AuthUserProvider'
 import { useCommitSheet } from '@/components/CommitSheetProvider'
+import { recordNoteOpened, notifySidebarNotesRefresh } from '@/lib/sidebarRecentOpened'
 import { useSidebar } from '@/components/ui/sidebar'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
-import { MessageCircleMore, X, Calendar, Tag, Link as LinkIcon, ArrowUp, ArrowDown, CircleCheck, Archive, CheckCircle2, Globe, Lock, GitBranch, FileText, ArrowLeft, Copy, Check } from 'lucide-react'
+import { MessageCircleMore, X, Calendar, Tag, Link as LinkIcon, ArrowUp, ArrowDown, CircleCheck, Archive, CheckCircle2, Globe, Lock, GitBranch, FileText, ArrowLeft, Copy, Check, Paperclip } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   Sheet,
@@ -46,11 +47,17 @@ interface Note {
   updated_at: string
 }
 
+interface CommitAttachment {
+  name: string
+  web_view_link: string
+}
+
 interface Commit {
   id: string
   title: string
   message: string | null
   created_at: string
+  attachments?: CommitAttachment[] | null
 }
 
 interface RelatedNote {
@@ -171,12 +178,13 @@ export default function NoteDetailPage() {
       }
 
       setNote(noteData as Note)
+      recordNoteOpened(noteId)
 
       const relatedIds = (noteData as Note).related_note_ids
       const [commitsRes, relatedRes] = await Promise.all([
         supabase
           .from('commits')
-          .select('id, title, message, created_at')
+          .select('id, title, message, created_at, attachments')
           .eq('note_id', noteId)
           .eq('user_id', user.id)
           .order('created_at', { ascending: false }),
@@ -213,7 +221,7 @@ export default function NoteDetailPage() {
     const loadCommits = async () => {
       const { data, error } = await supabase
         .from('commits')
-        .select('id, title, message, created_at')
+        .select('id, title, message, created_at, attachments')
         .eq('note_id', noteId)
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
@@ -242,7 +250,7 @@ export default function NoteDetailPage() {
     const loadCommits = async () => {
       const { data, error } = await supabase
         .from('commits')
-        .select('id, title, message, created_at')
+        .select('id, title, message, created_at, attachments')
         .eq('note_id', currentNoteId)
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
@@ -353,9 +361,8 @@ export default function NoteDetailPage() {
           <Sheet 
             open={isOpen} 
             onOpenChange={(open) => {
-              if (open) {
-                openSheet()
-              }
+              if (open) openSheet()
+              else closeSheet()
             }}
             modal={false}
           >
@@ -384,8 +391,10 @@ export default function NoteDetailPage() {
             </SheetTrigger>
             <SheetContent 
               side="right"
-              onInteractOutside={(e) => e.preventDefault()}
               onEscapeKeyDown={(e) => e.preventDefault()}
+              onInteractOutside={(e) => {
+                if ((e.target as HTMLElement).closest?.('[data-keep-sheet-open]')) e.preventDefault()
+              }}
               className="[&>button]:hidden"
             >
               <SheetHeader>
@@ -446,6 +455,22 @@ export default function NoteDetailPage() {
                         <p className="text-sm text-foreground whitespace-pre-wrap">
                           {commit.message}
                         </p>
+                      )}
+                      {commit.attachments && commit.attachments.length > 0 && (
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          <Paperclip className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
+                          {commit.attachments.map((att, idx) => (
+                            <a
+                              key={idx}
+                              href={att.web_view_link}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-sm text-blue-600 hover:underline"
+                            >
+                              {att.name || '첨부파일'}
+                            </a>
+                          ))}
+                        </div>
                       )}
                     </div>
                   ))
@@ -557,6 +582,7 @@ export default function NoteDetailPage() {
                 .eq('user_id', user.id)
               if (!error) {
                 setNote({ ...note, is_public: checked, share_token: shareToken })
+                notifySidebarNotesRefresh()
               }
             }}
           />

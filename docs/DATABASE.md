@@ -662,7 +662,7 @@ comment on column public.commits.message is
 '커밋 본문(메모). 선택 입력.';
 
 comment on column public.commits.attachments is
-'첨부파일 목록. jsonb 배열. 예: [{"file_id","name","web_view_link","mime_type"}]';
+'첨부파일 목록. jsonb 배열. 항목 형식: {"name": "파일명", "web_view_link": "https://drive.google.com/..."}. 구글 드라이브에서 선택 시 링크만 저장(업로드 없음).';
 
 comment on column public.commits.reference_urls is
 '참고 URL 목록. 다중 입력.';

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../lib/supabaseClient'
+import { clearDrivePickerLastFolderOnLogin } from '@/lib/googleDrivePicker'
 import type { User } from '@supabase/supabase-js'
 import { useSkeletonTiming } from '@/hooks/useSkeletonTiming'
 import NewNoteDialog from './NewNoteDialog'
@@ -27,7 +28,8 @@ export default function Auth() {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_IN') clearDrivePickerLastFolderOnLogin()
       setUser(session?.user ?? null)
       setLoading(false)
     })

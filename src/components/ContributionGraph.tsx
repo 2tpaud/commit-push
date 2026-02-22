@@ -11,6 +11,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
+import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 
 const KST_OFFSET_MS = 9 * 60 * 60 * 1000
@@ -168,7 +169,51 @@ export function ContributionGraph() {
     return (
       <div className="mx-auto w-fit max-w-full px-4 py-6">
         <div className="rounded-lg border bg-card p-6 shadow-sm">
-          <p className="text-muted-foreground">활동 데이터를 불러오는 중...</p>
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <Skeleton className="h-5 w-24" />
+              <Skeleton className="h-8 w-16" />
+            </div>
+            <Skeleton className="h-9 w-24" />
+          </div>
+          <div className="overflow-x-auto">
+            <div className="inline-flex flex-col gap-[3px]">
+              <div className="mb-1 flex gap-[3px] pl-0">
+                {Array.from({ length: 12 }).map((_, i) => (
+                  <Skeleton key={i} className="h-3 shrink-0" style={{ width: 28, minWidth: 28 }} />
+                ))}
+              </div>
+              <div className="inline-flex gap-[3px]">
+                <div className="flex flex-col justify-around gap-[3px] pr-2" style={{ width: WEEKDAY_WIDTH - 8 }}>
+                  {WEEKDAYS.map((d) => (
+                    <Skeleton key={d} className="h-3 w-4" />
+                  ))}
+                </div>
+                <div className="flex gap-[3px]">
+                  {Array.from({ length: 53 }).map((_, wi) => (
+                    <div key={wi} className="flex flex-col gap-[3px]">
+                      {Array.from({ length: 7 }).map((_, di) => (
+                        <Skeleton
+                          key={di}
+                          className="rounded-sm"
+                          style={{ width: CELL_SIZE, height: CELL_SIZE, minWidth: CELL_SIZE, minHeight: CELL_SIZE }}
+                        />
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="mt-4 flex items-center justify-end gap-1">
+            <Skeleton className="h-3 w-8" />
+            <div className="flex gap-0.5">
+              {[0, 1, 2, 3, 4].map((i) => (
+                <Skeleton key={i} className="h-3 w-3 rounded-sm" />
+              ))}
+            </div>
+            <Skeleton className="h-3 w-10" />
+          </div>
         </div>
       </div>
     )
@@ -222,7 +267,9 @@ export function ContributionGraph() {
                 <span className="font-medium">커밋 활동</span>
               </DropdownMenuCheckboxItem>
               <p className="px-2 py-0.5 text-xs text-muted-foreground">
-                해당 날짜에 생성된 커밋 수
+                해당 날짜에 생성·수정된 커밋 수
+                <br />
+                (같은 날 둘 다면 2회)
               </p>
             </DropdownMenuContent>
           </DropdownMenu>

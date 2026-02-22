@@ -19,6 +19,7 @@ import {
 import { ChevronRight, ChevronDown, ChevronUp, FileText, Search, LayoutDashboard, ScrollText, BookOpen } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
+import { getRecentOpenedMap } from '@/lib/sidebarRecentOpened'
 
 type SidebarView = 'tree' | 'search' | 'dashboard'
 type SearchMode = 'title' | 'tag'
@@ -63,7 +64,8 @@ export default function AppSidebar({ userId }: { userId: string }) {
   const [sidebarView, setSidebarView] = useState<SidebarView>('tree')
   const [searchMode, setSearchMode] = useState<SearchMode>('title')
   const [searchQuery, setSearchQuery] = useState('')
-  
+  const [lastOpenedUpdate, setLastOpenedUpdate] = useState(0)
+
   // 최근 항목 영역 높이 비율 (0.0 ~ 1.0, 기본값 0.2 = 1/5)
   // localStorage에서 저장된 값 불러오기
   const [recentItemsRatio, setRecentItemsRatio] = useState(() => {
@@ -111,6 +113,7 @@ export default function AppSidebar({ userId }: { userId: string }) {
     router.prefetch('/developer-notes')
   }, [router])
 
+  const [notesRefreshTrigger, setNotesRefreshTrigger] = useState(0)
   useEffect(() => {
     let mounted = true
     void Promise.resolve(
@@ -130,15 +133,45 @@ export default function AppSidebar({ userId }: { userId: string }) {
       if (mounted) setLoading(false)
     })
     return () => { mounted = false }
-  }, [userId])
+  }, [userId, notesRefreshTrigger])
+
+  /** 탭/창 포커스 시·노트 저장 시 노트 목록 재조회 (수정 반영, 제목 갱신) */
+  useEffect(() => {
+    const onRefresh = () => setNotesRefreshTrigger((n) => n + 1)
+    const onVisibility = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') onRefresh()
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+    window.addEventListener('sidebarNotesRefresh', onRefresh)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility)
+      window.removeEventListener('sidebarNotesRefresh', onRefresh)
+    }
+  }, [])
 
   const tree = useMemo(() => buildCategoryTree(notes), [notes])
 
-  /** 최근 수정일 순 노트 (하단 목록용) */
-  const recentNotes = useMemo(
-    () => [...notes].sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()),
-    [notes]
-  )
+  useEffect(() => {
+    const handler = () => setLastOpenedUpdate((n) => n + 1)
+    window.addEventListener('sidebarRecentOpenedUpdated', handler)
+    return () => window.removeEventListener('sidebarRecentOpenedUpdated', handler)
+  }, [])
+
+  /** 최근 항목: 수정일 + 열어본 시각 중 더 최근 기준 정렬 (열어본 노트도 포함) */
+  const recentNotes = useMemo(() => {
+    const opened = typeof window !== 'undefined' ? getRecentOpenedMap() : {}
+    return [...notes].sort((a, b) => {
+      const aTime = Math.max(
+        new Date(a.updated_at).getTime(),
+        opened[a.id] ?? 0
+      )
+      const bTime = Math.max(
+        new Date(b.updated_at).getTime(),
+        opened[b.id] ?? 0
+      )
+      return bTime - aTime
+    })
+  }, [notes, lastOpenedUpdate])
 
   /** 검색 자동완성: 제목 또는 태그로 필터 */
   const searchResults = useMemo(() => {
@@ -204,7 +237,7 @@ export default function AppSidebar({ userId }: { userId: string }) {
   return (
     <Sidebar>
       {/* p-0으로 상단 패딩 제거 → 아이콘 행이 헤더와 동일 높이·라인 정렬 */}
-      <SidebarContent ref={sidebarContentRef} className="flex flex-col min-h-0 p-0">
+      <SidebarContent ref={sidebarContentRef} className="flex flex-col min-h-0 p-0" data-keep-sheet-open>
         {/* 뷰 전환: 홈 CommitPush 로고와 동일 선상(h-14) + 라인 정렬 */}
         <div className="flex h-14 shrink-0 items-center gap-1 border-b border-border px-2">
           <Tooltip>

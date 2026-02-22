@@ -4,7 +4,7 @@ import { createClient } from '@supabase/supabase-js'
 /**
  * 활동 기여도용 데이터 소스 (docs/DATABASE.md 기준)
  * - 노트 활동: public.notes (created_at, updated_at) — 해당 날짜 생성·수정 건수
- * - 커밋 활동: public.commits (created_at) — 해당 날짜 생성 건수
+ * - 커밋 활동: public.commits (created_at, updated_at) — 해당 날짜 생성·수정 건수 (노트와 동일하게 둘 다 반영)
  * - 기간: query year 파라미터 기준 해당 연도 1월 1일(KST) ~ 12월 31일(KST) 전체
  */
 const KST_OFFSET_MS = 9 * 60 * 60 * 1000
@@ -53,7 +53,7 @@ export async function GET(request: Request) {
       .limit(10000),
     supabase
       .from('commits')
-      .select('created_at')
+      .select('created_at, updated_at')
       .eq('user_id', uid)
       .limit(10000),
   ])
@@ -89,8 +89,13 @@ export async function GET(request: Request) {
 
   for (const c of commitsRes.data ?? []) {
     const createdAt = c.created_at ? new Date(c.created_at).getTime() : 0
+    const updatedAt = c.updated_at ? new Date(c.updated_at).getTime() : 0
     if (createdAt >= startMs && createdAt < startNextYearMs) {
       const key = dateKeyKST(createdAt)
+      if (byDate[key] !== undefined) byDate[key].commits += 1
+    }
+    if (updatedAt >= startMs && updatedAt < startNextYearMs && updatedAt !== createdAt) {
+      const key = dateKeyKST(updatedAt)
       if (byDate[key] !== undefined) byDate[key].commits += 1
     }
   }
@@ -105,6 +110,7 @@ export async function GET(request: Request) {
   }
   for (const c of commitsRes.data ?? []) {
     if (c.created_at) yearsSet.add(new Date(new Date(c.created_at).getTime() + KST_OFFSET_MS).getUTCFullYear())
+    if (c.updated_at) yearsSet.add(new Date(new Date(c.updated_at).getTime() + KST_OFFSET_MS).getUTCFullYear())
   }
   let availableYears = Array.from(yearsSet).sort((a, b) => a - b)
   if (availableYears.length === 0) {

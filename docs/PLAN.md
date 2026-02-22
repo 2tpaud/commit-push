@@ -37,6 +37,7 @@ SaaS 확장을 위한 요금제 구조와 `users` 테이블 연동, 한도 정�
 
 - 실제 제한 적용은 서버/Edge에서 `users.total_notes`, `users.total_commits`와 위 한도를 비교해 수행하는 것을 권장합니다.
 - **노트 외부 공유**(공유여부 ON)는 Pro/Team 플랜에서만 가능하며, Free 플랜에서 ON 시도 시 AlertDialog로 업그레이드 유도합니다.
+- **커밋 첨부파일**: 구글 드라이브에서 선택(앱 자체 피커 다이얼로그) 또는 링크 추가로 `commits.attachments`에 링크만 저장. 구현 완료.
 
 ---
 
