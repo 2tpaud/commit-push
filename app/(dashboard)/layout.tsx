@@ -35,31 +35,25 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   useEffect(() => {
     let mounted = true
-    const run = async () => {
-      const { data: { session } } = await supabase.auth.getSession()
+    const applySession = (session: { user: User | null; access_token?: string } | null) => {
       if (!mounted) return
-      setUser(session?.user ?? null)
+      const u = session?.user ?? null
+      setUser(u)
       setLoading(false)
       requestAnimationFrame(() => clearEmptyHash())
       setTimeout(clearEmptyHash, 150)
-      if (session?.user?.id && session.access_token) {
+      if (u?.id && session?.access_token) {
         fetch('/api/plan/check-expiry', {
           headers: { Authorization: `Bearer ${session.access_token}` },
         }).catch(() => { /* ignore */ })
       }
     }
-    run()
+    // 구독 먼저 등록 → 캐시된 세션이 있으면 onAuthStateChange가 먼저 콜백 호출 → 화면 진입 빠름
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!mounted) return
-      setUser(session?.user ?? null)
-      setLoading(false)
-      requestAnimationFrame(() => clearEmptyHash())
-      setTimeout(clearEmptyHash, 150)
-      if (session?.user?.id && session?.access_token) {
-        fetch('/api/plan/check-expiry', {
-          headers: { Authorization: `Bearer ${session.access_token}` },
-        }).catch(() => { /* ignore */ })
-      }
+      applySession(session)
+    })
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      applySession(session)
     })
     return () => {
       mounted = false
