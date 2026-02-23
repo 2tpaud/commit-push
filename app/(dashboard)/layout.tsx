@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
-import type { User } from '@supabase/supabase-js'
+import type { User, Session } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabaseClient'
 import PageLoadingSkeleton from '@/components/PageLoadingSkeleton'
 import SharedAppLayout from '@/components/SharedAppLayout'
@@ -14,6 +14,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const router = useRouter()
   const pathname = usePathname()
   const [user, setUser] = useState<User | null>(null)
+  const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(true)
 
   const clearEmptyHash = () => {
@@ -35,16 +36,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   useEffect(() => {
     let mounted = true
-    const applySession = (session: { user: User | null; access_token?: string } | null) => {
+    const applySession = (s: Session | null) => {
       if (!mounted) return
-      const u = session?.user ?? null
+      const u = s?.user ?? null
       setUser(u)
+      setSession(s)
       setLoading(false)
       requestAnimationFrame(() => clearEmptyHash())
       setTimeout(clearEmptyHash, 150)
-      if (u?.id && session?.access_token) {
+      if (u?.id && s?.access_token) {
         fetch('/api/plan/check-expiry', {
-          headers: { Authorization: `Bearer ${session.access_token}` },
+          headers: { Authorization: `Bearer ${s.access_token}` },
         }).catch(() => { /* ignore */ })
       }
     }
@@ -85,7 +87,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }
 
   return (
-    <AuthUserProvider user={user}>
+    <AuthUserProvider user={user} session={session}>
       <CommitSheetProvider>
         <SharedAppLayout user={user}>{children}</SharedAppLayout>
       </CommitSheetProvider>

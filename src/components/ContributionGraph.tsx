@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { ChevronDown } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
+import { useAuthSession } from '@/components/AuthUserProvider'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -65,6 +66,7 @@ const MONTH_ROW_HEIGHT = 16
 const GRID_LEFT_OFFSET = WEEKDAY_WIDTH - 8 + CELL_GAP
 
 export function ContributionGraph() {
+  const authSession = useAuthSession()
   const currentYear = new Date(Date.now() + KST_OFFSET_MS).getUTCFullYear()
   const [year, setYear] = useState(currentYear)
   const [byDate, setByDate] = useState<DayMap | null>(null)
@@ -76,15 +78,15 @@ export function ContributionGraph() {
   const gridWrapperRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
+    const token = authSession?.access_token
     const run = async () => {
-      const { data: { session } } = await supabase.auth.getSession()
-      const token = session?.access_token
-      if (!token) {
+      const resolvedToken = token ?? (await supabase.auth.getSession()).data.session?.access_token
+      if (!resolvedToken) {
         setByDate({})
         return
       }
       const res = await fetch(`/api/activity?year=${year}`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${resolvedToken}` },
       })
       if (!res.ok) {
         setByDate({})
@@ -99,7 +101,7 @@ export function ContributionGraph() {
       }
     }
     run().catch(() => setByDate({}))
-  }, [year])
+  }, [year, authSession?.access_token])
 
   const { grid, total, maxPerDay, monthLabels, startSundayMs, startMs, endMs } = useMemo(() => {
     if (!byDate) return { grid: null, total: 0, maxPerDay: 0, monthLabels: [] as { label: string; colIndex: number; left: number }[], startSundayMs: 0, startMs: 0, endMs: 0 }
