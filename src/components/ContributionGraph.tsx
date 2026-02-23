@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom'
 import { ChevronDown } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import { useAuthSession } from '@/components/AuthUserProvider'
+import { getActivityCached, getActivityPending, setActivityCached } from '@/lib/activityCache'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -78,6 +79,25 @@ export function ContributionGraph() {
   const gridWrapperRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
+    const cached = getActivityCached(year)
+    if (cached) {
+      setByDate(cached.byDate)
+      setMeta(cached.meta)
+      return
+    }
+    const pending = getActivityPending(year)
+    if (pending) {
+      pending.then((entry) => {
+        if (entry) {
+          setByDate(entry.byDate)
+          setMeta(entry.meta)
+          if (entry.meta?.availableYears?.length && !entry.meta.availableYears.includes(year)) {
+            setYear(entry.meta.availableYears[entry.meta.availableYears.length - 1])
+          }
+        }
+      }).catch(() => setByDate({}))
+      return
+    }
     const token = authSession?.access_token
     const run = async () => {
       const resolvedToken = token ?? (await supabase.auth.getSession()).data.session?.access_token
@@ -93,9 +113,11 @@ export function ContributionGraph() {
         return
       }
       const data: { byDate: DayMap; meta?: { notesFetched: number; commitsFetched: number; availableYears?: number[] } } = await res.json()
-      setByDate(data.byDate ?? {})
+      const nextByDate = data.byDate ?? {}
       const nextMeta = data.meta ?? null
+      setByDate(nextByDate)
       setMeta(nextMeta)
+      if (nextMeta) setActivityCached(year, { byDate: nextByDate, meta: nextMeta })
       if (nextMeta?.availableYears?.length && !nextMeta.availableYears.includes(year)) {
         setYear(nextMeta.availableYears[nextMeta.availableYears.length - 1])
       }

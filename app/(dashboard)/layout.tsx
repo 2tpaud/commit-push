@@ -9,6 +9,7 @@ import SharedAppLayout from '@/components/SharedAppLayout'
 import LandingPage from '@/components/LandingPage'
 import { AuthUserProvider } from '@/components/AuthUserProvider'
 import { CommitSheetProvider } from '@/components/CommitSheetProvider'
+import { getActivityCached, getActivityPending, setActivityPending } from '@/lib/activityCache'
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
@@ -78,6 +79,22 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     const t = setTimeout(clearEmptyHash, 300)
     return () => clearTimeout(t)
   }, [user])
+
+  // 로그인 직후 현재 연도 활동 데이터 프리페치 → 홈 진입 시 캐시로 그래프 로딩 단축
+  useEffect(() => {
+    if (!session?.access_token) return
+    const year = new Date(Date.now() + 9 * 60 * 60 * 1000).getUTCFullYear()
+    if (getActivityCached(year) || getActivityPending(year)) return
+    const promise = fetch(`/api/activity?year=${year}`, {
+      headers: { Authorization: `Bearer ${session.access_token}` },
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: { byDate?: Record<string, { notes: number; commits: number }>; meta?: { notesFetched: number; commitsFetched: number; availableYears?: number[] } } | null) =>
+        data?.byDate && data?.meta ? { byDate: data.byDate, meta: data.meta } : null
+      )
+      .catch(() => null)
+    setActivityPending(year, promise)
+  }, [session?.access_token])
 
   if (loading) return <PageLoadingSkeleton />
   if (!user) {
