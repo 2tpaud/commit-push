@@ -38,38 +38,28 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     const run = async () => {
       const { data: { session } } = await supabase.auth.getSession()
       if (!mounted) return
-      if (session?.user?.id && session.access_token) {
-        try {
-          await fetch('/api/plan/check-expiry', {
-            headers: { Authorization: `Bearer ${session.access_token}` },
-          })
-        } catch {
-          // ignore
-        }
-      }
-      if (!mounted) return
       setUser(session?.user ?? null)
       setLoading(false)
       requestAnimationFrame(() => clearEmptyHash())
       setTimeout(clearEmptyHash, 150)
+      if (session?.user?.id && session.access_token) {
+        fetch('/api/plan/check-expiry', {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        }).catch(() => { /* ignore */ })
+      }
     }
     run()
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      if (!mounted) return
-      if (session?.user?.id && session?.access_token) {
-        try {
-          await fetch('/api/plan/check-expiry', {
-            headers: { Authorization: `Bearer ${session.access_token}` },
-          })
-        } catch {
-          // ignore
-        }
-      }
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!mounted) return
       setUser(session?.user ?? null)
       setLoading(false)
       requestAnimationFrame(() => clearEmptyHash())
       setTimeout(clearEmptyHash, 150)
+      if (session?.user?.id && session?.access_token) {
+        fetch('/api/plan/check-expiry', {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        }).catch(() => { /* ignore */ })
+      }
     })
     return () => {
       mounted = false
