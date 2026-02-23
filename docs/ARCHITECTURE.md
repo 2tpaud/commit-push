@@ -34,13 +34,13 @@ BigQuery 기반 실행 분석 시스템
 
 ### API (Next.js Route Handlers)
 
-- **`/api/plan/check-expiry`**: 대시보드 진입·로그인 시 호출. `plan_expires_at`이 지난 유료 플랜 사용자를 `plan = 'free'`로 갱신.
+- **`/api/plan/check-expiry`**: 대시보드 진입·로그인 시 **비동기** 호출(화면 진입 블로킹 없음). `plan_expires_at`이 지난 유료 플랜 사용자를 `plan = 'free'`로 갱신.
 - **`/api/payment/config`**: GET — 결제창용 `clientId` 반환 (클라이언트에서 나이스페이 SDK 전 환경 변수 노출 없이 조회).
 - **`/api/payment/create`**: 나이스페이 주문 생성 후 결제창 호출용 `orderId`, `amount`, `goodsName` 반환.
 - **`/api/payment/return`**: 결제 완료 후 콜백. 승인 API 호출 후 `payments` 갱신, `users.plan` / `users.plan_expires_at` 반영, `notifications`에 결제 완료 알림 삽입.
 - **`/api/payment/webhook`**: 나이스페이 웹훅(결제 승인 시). GET/HEAD/OPTIONS는 URL 등록 검증용 200 반환. POST: 서명 검증 후 미처리 건만 승인 API 호출·DB 갱신, `notifications` 삽입. 응답 `Content-Type: text/html`, body `OK`.
 - **`/api/notifications`**: GET — 로그인 사용자 알림 목록. PATCH `/api/notifications/[id]/read` — 읽음 처리.
-- **`/api/activity`**: GET — 연도별 활동 집계(`year` 쿼리). 홈 활동 그래프(ContributionGraph)에서 노트·커밋의 **생성·수정** 일별 횟수 조회(노트/커밋 모두 `created_at`, `updated_at` 반영).
+- **`/api/activity`**: GET — 연도별 활동 집계(`year` 쿼리). 홈 활동 그래프(ContributionGraph)에서 노트·커밋의 **생성·수정** 일별 횟수 조회(노트/커밋 모두 `created_at`, `updated_at` 반영). 클라이언트: 레이아웃에서 세션 확보 시 현재 연도 **프리페치**, `src/lib/activityCache.ts`로 연도별 캐시·진행 중 요청 공유 → 재진입 시 로딩 최소화.
 - **`/api/docs/[slug]`**: GET — 문서 원문 조회. `slug`는 `architecture` | `database` | `design` | `plan` | `product` 중 하나. 개발자 노트 등에서 docs 마크다운 로드 시 사용.
 
 ### Deployment

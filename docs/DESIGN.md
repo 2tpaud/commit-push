@@ -8,8 +8,8 @@
 - **동작**:
   - 세션 확인 후, 비로그인 시 **공개 경로**만 허용: `/` → `LandingPage`, `/pricing` → 이용요금 페이지. 그 외 경로는 `/`로 리다이렉트.
   - `/login` 접속 시 `app/(dashboard)/login/page.tsx`에서 `/`로 리다이렉트 (전용 로그인 페이지 없음).
-  - 로그인 시: `AuthUserProvider` → `CommitSheetProvider` → `SharedAppLayout` 순으로 `children` 감쌈.
-- **프로바이더**: 각 페이지는 `useAuthUser()`, `useCommitSheet()` 훅으로 접근.
+  - 로그인 시: `AuthUserProvider`(user·session 전달) → `CommitSheetProvider` → `SharedAppLayout` 순으로 `children` 감쌈. 세션은 활동 그래프 등 API 호출 시 `useAuthSession()`으로 즉시 사용(토큰 대기 없음).
+- **프로바이더**: 각 페이지는 `useAuthUser()`, `useAuthSession()`(세션/토큰), `useCommitSheet()` 훅으로 접근.
 - **대시보드 라우트** (URL에 `(dashboard)`는 포함되지 않음):
   - `/` → 비로그인 시 랜딩, 로그인 시 `app/(dashboard)/page.tsx` (홈)
   - `/pricing` → `app/(dashboard)/pricing/page.tsx` (이용요금, 비로그인 공개)
@@ -63,7 +63,7 @@
 ### 홈 화면 (로그인 후)
 - **위치**: `app/(dashboard)/page.tsx`
 - **노출**: 로그인 후 path `/`일 때 (비로그인 시 `/`는 랜딩 페이지).
-- SharedAppLayout 내부: **활동 그래프(ContributionGraph)** 한 개만 표시. 연도별·노트/커밋 활동 히트맵, 호버 시 툴팁(날짜·활동 횟수). 로딩 중에는 Skeleton으로 플레이스홀더 표시. **커밋푸시**·**새 노트 생성**·**알림**은 헤더 우측의 아이콘(MessageCircleMore, FilePlus, Bell)으로 제공되며, 클릭 시 SharedAppLayout에서 렌더하는 NewNoteDialog / CommitPushDialog 또는 알림 드롭다운이 열림.
+- SharedAppLayout 내부: **활동 그래프(ContributionGraph)** 한 개만 표시. 연도별·노트/커밋 활동 히트맵, 호버 시 툴팁(날짜·활동 횟수). 로딩 중에는 Skeleton 표시. **연도별 캐시**(`activityCache`)와 레이아웃 **프리페치**로 같은 연도 재진입 시 로딩 거의 없음. **커밋푸시**·**새 노트 생성**·**알림**은 헤더 우측의 아이콘(MessageCircleMore, FilePlus, Bell)으로 제공되며, 클릭 시 SharedAppLayout에서 렌더하는 NewNoteDialog / CommitPushDialog 또는 알림 드롭다운이 열림.
 
 ### 요금제 페이지 (`/plan`)
 - **위치**: `app/(dashboard)/plan/page.tsx`
