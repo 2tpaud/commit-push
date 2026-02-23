@@ -16,6 +16,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
 
+  // 로그인 후 등 어딘가에서 URL에 빈 해시(#)가 붙는 경우 제거 (redirect_uri_mismatch·깔끔한 URL)
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const h = window.location.hash
+    if (h === '' || h === '#') {
+      const path = window.location.pathname || '/'
+      const search = window.location.search || ''
+      window.history.replaceState(null, '', path + search)
+    }
+  }, [])
+
   useEffect(() => {
     let mounted = true
     const run = async () => {

@@ -49,7 +49,7 @@ export async function GET(request: Request) {
         console.warn('User profile creation failed (trigger should handle this):', profileError)
       }
     }
-    return NextResponse.redirect(requestUrl.origin)
+    return NextResponse.redirect(requestUrl.origin + '/')
   }
 
   // 이메일 매직 링크: 해시(#access_token=...)는 서버에 전달되지 않으므로
