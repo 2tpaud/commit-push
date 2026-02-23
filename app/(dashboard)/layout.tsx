@@ -16,8 +16,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
 
-  // 로그인 후 등 어딘가에서 URL에 빈 해시(#)가 붙는 경우 제거 (redirect_uri_mismatch·깔끔한 URL)
-  useEffect(() => {
+  const clearEmptyHash = () => {
     if (typeof window === 'undefined') return
     const h = window.location.hash
     if (h === '' || h === '#') {
@@ -25,6 +24,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       const search = window.location.search || ''
       window.history.replaceState(null, '', path + search)
     }
+  }
+
+  useEffect(() => {
+    clearEmptyHash()
+    const onHashChange = () => clearEmptyHash()
+    window.addEventListener('hashchange', onHashChange)
+    return () => window.removeEventListener('hashchange', onHashChange)
   }, [])
 
   useEffect(() => {
@@ -44,6 +50,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       if (!mounted) return
       setUser(session?.user ?? null)
       setLoading(false)
+      requestAnimationFrame(() => clearEmptyHash())
+      setTimeout(clearEmptyHash, 150)
     }
     run()
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
@@ -60,6 +68,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       if (!mounted) return
       setUser(session?.user ?? null)
       setLoading(false)
+      requestAnimationFrame(() => clearEmptyHash())
+      setTimeout(clearEmptyHash, 150)
     })
     return () => {
       mounted = false
@@ -76,6 +86,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       router.replace('/')
     }
   }, [loading, user, pathname, isPublicPath, router])
+
+  useEffect(() => {
+    if (!user) return
+    const t = setTimeout(clearEmptyHash, 300)
+    return () => clearTimeout(t)
+  }, [user])
 
   if (loading) return <PageLoadingSkeleton />
   if (!user) {
