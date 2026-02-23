@@ -140,10 +140,22 @@ function requestDriveAccessToken(clientId: string, scope: string = DRIVE_SCOPE):
   })
 }
 
+/** redirect_uri_mismatch 방지: URL에 빈 해시(# 또는 #만)가 있으면 GIS가 redirect_uri에 #를 포함해 보내 등록된 URI와 불일치할 수 있음. 토큰 요청 전에 제거. */
+function clearEmptyHashBeforeTokenRequest(): void {
+  if (typeof window === 'undefined') return
+  const h = window.location.hash
+  if (h === '' || h === '#') {
+    const path = window.location.pathname || '/'
+    const search = window.location.search || ''
+    window.history.replaceState(null, '', path + search)
+  }
+}
+
 /** Drive API 호출용 액세스 토큰 (캐시 사용). 우리 쪽 다이얼로그에서 파일 목록 조회할 때 사용. drive.readonly로 목록/메타 조회 가능. */
 export async function getDriveAccessToken(): Promise<string> {
   const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID
   if (!clientId?.trim()) throw new Error('NEXT_PUBLIC_GOOGLE_CLIENT_ID를 설정해 주세요.')
+  clearEmptyHashBeforeTokenRequest()
   const now = Date.now()
   if (cachedDriveToken && cachedDriveTokenExpiresAt > now) return cachedDriveToken
   await loadGSIScript()

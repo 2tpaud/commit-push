@@ -59,8 +59,9 @@ Vercel
 | `NICE_PAY_API_BASE` | 선택 | 나이스페이 승인 API 도메인 | 미설정 시 테스트(sandbox) 사용 |
 | `NEXT_PUBLIC_NICE_PAY_SDK_URL` | 선택 | 결제창 JS 스크립트 URL | 미설정 시 테스트(sandbox) 사용 |
 | `SUPABASE_SERVICE_ROLE_KEY` | 선택 | Supabase 서비스 롤 키 | 웹훅에서 결제·알림 DB 갱신 시 필요. **서버 전용, 노출 금지** |
-| `NEXT_PUBLIC_GOOGLE_CLIENT_ID` | 선택 | Google OAuth 웹 클라이언트 ID(앱 1개당 1개) | 커밋푸시 "구글 드라이브에서 선택" 시 Picker API용. 사용자별 값이 아님. 각 사용자는 자기 Google 계정으로 로그인해 자기 Drive에서만 선택·링크 저장(파일 업로드 없음). |
-| `NEXT_PUBLIC_GOOGLE_APP_ID` | 선택 | Google Cloud 프로젝트 번호 | Picker API setAppId용. 없어도 동작할 수 있음. |
+| `NEXT_PUBLIC_GOOGLE_CLIENT_ID` | 선택 | Google OAuth 웹 클라이언트 ID(앱 1개당 1개) | 커밋푸시 "구글 드라이브에서 선택" 시 Drive API(앱 내 피커)용. 사용자별 값이 아님. 각 사용자는 자기 Google 계정으로 로그인해 자기 Drive에서만 선택·링크 저장(파일 업로드 없음). **배포 환경 사용 시** 아래 "Google Drive 연동(배포)" 참고. |
+| `NEXT_PUBLIC_GOOGLE_APP_ID` | 선택 | Google Cloud 프로젝트 번호 | 없어도 동작할 수 있음. |
 
+- **Google Drive 연동(배포)**: `NEXT_PUBLIC_GOOGLE_CLIENT_ID`에 쓰는 OAuth 2.0 클라이언트(웹 앱)에 **배포 도메인**을 반드시 등록해야 함. [Google Cloud Console](https://console.cloud.google.com/) → APIs & Services → Credentials → 해당 OAuth 2.0 Client ID 편집 → **Authorized JavaScript origins**에 `https://www.commitpush.cloud`(또는 실제 배포 도메인) 추가 → **Authorized redirect URIs**에 `https://www.commitpush.cloud` 와 `https://www.commitpush.cloud/` 추가(슬래시 유무 모두). 저장 후 수 분 내 반영. 미등록 시 "400 redirect_uri_mismatch" 발생.
 - Supabase 키는 [Supabase 대시보드](https://supabase.com/dashboard) → 프로젝트 → Settings → API에서 확인.
 - 나이스페이 키는 [나이스페이 개발정보](https://start.nicepay.co.kr/manual/admin/developers/key/info.do)에서 발급. 운영 배포 시 `NICE_PAY_API_BASE`·`NEXT_PUBLIC_NICE_PAY_SDK_URL`을 운영 도메인/URL로 설정하고 운영 키로 교체.

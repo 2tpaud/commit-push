@@ -53,8 +53,9 @@ export async function GET(request: Request) {
   }
 
   // 이메일 매직 링크: 해시(#access_token=...)는 서버에 전달되지 않으므로
-  // 클라이언트에서 해시를 유지한 채 origin으로 이동시킴
-  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body><script>window.location.replace("${requestUrl.origin}" + window.location.hash);</script><p>로그인 처리 중...</p></body></html>`
+  // 클라이언트에서 해시를 유지한 채 origin으로 이동시킴.
+  // 빈 해시(#만 있거나 없음)면 origin만 사용해 배포 환경에서 URL이 /# 로 끝나지 않도록 함.
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body><script>(function(){var h=window.location.hash; window.location.replace("${requestUrl.origin}" + (h && h !== "#" ? h : ""));})();</script><p>로그인 처리 중...</p></body></html>`
   return new NextResponse(html, {
     headers: { 'Content-Type': 'text/html; charset=utf-8' },
   })
