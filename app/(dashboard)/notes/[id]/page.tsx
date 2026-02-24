@@ -116,9 +116,10 @@ function formatStatus(status: string | null): string {
 export default function NoteDetailPage() {
   const params = useParams()
   const searchParams = useSearchParams()
-  const noteId = params.id as string
+  const rawId = params?.id
+  const noteId = (typeof rawId === 'string' ? rawId : rawId?.[0] ?? '') || ''
   const fromNoteId = searchParams.get('from')
-  
+
   const user = useAuthUser()
   const { isOpen, openSheet, closeSheet, currentNoteId, setCurrentNoteId } = useCommitSheet()
   const { open: isSidebarOpen } = useSidebar()
