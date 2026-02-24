@@ -118,7 +118,7 @@ export default function NoteDetailPage() {
   const searchParams = useSearchParams()
   const rawId = params?.id
   const noteId = (typeof rawId === 'string' ? rawId : rawId?.[0] ?? '') || ''
-  const fromNoteId = searchParams.get('from')
+  const fromNoteId = searchParams?.get('from') ?? null
 
   const user = useAuthUser()
   const { isOpen, openSheet, closeSheet, currentNoteId, setCurrentNoteId } = useCommitSheet()

@@ -184,8 +184,8 @@ export default function PlanPage() {
   }, [user])
 
   useEffect(() => {
-    const success = searchParams.get('success')
-    const error = searchParams.get('error')
+    const success = searchParams?.get('success')
+    const error = searchParams?.get('error')
     if (success === '1') {
       setMessage({ type: 'success', text: '결제가 완료되었습니다. 플랜이 적용되었습니다.' })
       window.history.replaceState({}, '', '/plan')
@@ -210,7 +210,7 @@ export default function PlanPage() {
   }, [searchParams, refetchProfile, refetchPayments])
 
   useEffect(() => {
-    if (searchParams.get('success') === '1' && user) {
+    if (searchParams?.get('success') === '1' && user) {
       refetchProfile()
       refetchPayments()
     }
