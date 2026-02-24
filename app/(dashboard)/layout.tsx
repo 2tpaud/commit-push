@@ -65,7 +65,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }, [])
 
   const publicPaths = ['/', '/login', '/pricing']
-  const isPublicPath = publicPaths.includes(pathname)
+  const isPublicPath = publicPaths.includes(pathname ?? '')
 
   useEffect(() => {
     if (loading) return
