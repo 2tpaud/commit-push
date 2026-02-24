@@ -1,7 +1,13 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  transpilePackages: [
+    '@tiptap/core',
+    '@tiptap/pm',
+    '@tiptap/react',
+    '@tiptap/starter-kit',
+    '@tiptap/markdown',
+  ],
 };
 
 export default nextConfig;

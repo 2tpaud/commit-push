@@ -16,8 +16,8 @@ import {
 } from './ui/dialog'
 import { Button } from './ui/button'
 import { Input } from './ui/input'
-import { Textarea } from './ui/textarea'
 import { Label } from './ui/label'
+import RichTextEditor from './RichTextEditor'
 import { Badge } from './ui/badge'
 import { X } from 'lucide-react'
 
@@ -91,7 +91,6 @@ export default function NewNoteDialog({
   const categorySmallRef = useRef<HTMLDivElement>(null)
   const notesRef = useRef<HTMLDivElement>(null)
   const tagsRef = useRef<HTMLDivElement>(null)
-
   useEffect(() => {
     if (isOpen && user) {
       loadExistingData(user.id)
@@ -848,13 +847,16 @@ export default function NewNoteDialog({
 
             <div>
               <Label>설명</Label>
-              <Textarea
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                rows={3}
-                placeholder="노트에 대한 간단한 설명을 입력하세요"
-                className="mt-2"
-              />
+              <div
+                className="mt-2 flex h-[220px] min-h-[120px] max-h-[280px] resize-y flex-col overflow-hidden rounded-lg border border-input"
+              >
+                <RichTextEditor
+                  value={description}
+                  onChange={(v) => setDescription(v ?? '')}
+                  placeholder="내용을 입력하세요."
+                  className="min-h-0 flex-1"
+                />
+              </div>
             </div>
 
             {/* 카테고리 */}

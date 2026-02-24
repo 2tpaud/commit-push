@@ -197,6 +197,7 @@ body {
 - **Button**
 - **Dialog**
 - **Input**, **Textarea**, **Label**
+- **RichTextEditor** — 새 노트/노트 수정 다이얼로그의 설명 필드(TipTap, 마크다운 저장)
 - **Badge**, **Checkbox**
 - **Switch** — 공유여부 토글 등
 - **Sheet** — 커밋 내역 슬라이드 패널
@@ -240,6 +241,15 @@ body {
 - 배경: 흰색 (`bg-white`), 테두리: `border`, 그림자: `shadow-lg`, 둥근 모서리: `sm:rounded-lg`
 - 구현: `src/components/ui/dialog.tsx` (DialogOverlay `bg-black/80`, DialogContent `border bg-white p-6 shadow-lg sm:rounded-lg`)
 
+### 새 노트 / 노트 수정 다이얼로그 (NewNoteDialog)
+- **위치**: `src/components/NewNoteDialog.tsx`. 헤더의 새 노트 생성(FilePlus) 클릭 또는 작업 로그 등에서 열림.
+- **폼 구성**: 제목(필수), **설명**(RichTextEditor), 카테고리(대·중·소분류), 태그, 연관 노트, DialogFooter(취소/노트 생성·수정).
+- **설명 필드**:
+  - **RichTextEditor** (TipTap 기반, `src/components/RichTextEditor.tsx`) 사용. DB에는 **마크다운**으로 저장(`notes.description`).
+  - 상단 고정 툴바: Undo/Redo, 굵게/기울임/밑줄/취소선, 형광펜(드롭다운), 인라인 코드, 제목(본문·제목1~4, 드롭다운), 목록(글머리·번호·할 일, 드롭다운), 링크, 인용, 코드 블록, 정렬(왼쪽·가운데·오른쪽·양쪽). 드롭다운 메뉴는 **포탈**(`document.body`)로 렌더되어 overflow에 가리지 않음.
+  - 설명 영역: 기본 높이 220px, 최소 120px, 최대 280px, **resize-y**로 드래그하여 세로 크기 조절 가능. 커밋푸시 다이얼로그 메모와 동일하게 네이티브 리사이즈.
+- **한도**: 노트 생성 전 `getLimitsForPlan(plan).maxNotes`로 한도 초과 시 insert 차단 및 안내.
+
 ## 입력 필드 스타일
 
 ### 기본 Input
@@ -250,6 +260,12 @@ body {
 ### Textarea
 - Input과 동일한 스타일
 - 다중 줄 입력 지원
+- 사용 예: 커밋푸시 다이얼로그의 메모 필드 (`rows={3}`, resize 가능)
+
+### RichTextEditor (노트 설명)
+- **용도**: 새 노트/노트 수정 다이얼로그의 설명 필드. WYSIWYG 편집, 저장은 마크다운.
+- **구성**: TipTap + StarterKit(제목 1~4), Underline, Highlight(다색), TextAlign, Link, TaskList/TaskItem, Markdown 확장. 상단 고정 툴바, 드롭다운(제목·목록·형광펜·링크)은 포탈로 표시.
+- **스타일**: 툴바 버튼·드롭다운 트리거는 선택 시 `border-primary bg-primary/10 text-primary`, 미선택 시 `border-transparent text-muted-foreground`. 한 줄에 안 들어가면 툴바는 `flex-wrap`으로 줄바꿈.
 
 ## 배지(Badge) 스타일
 
