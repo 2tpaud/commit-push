@@ -28,11 +28,14 @@
     "@supabase/supabase-js": "^2.95.3",
     "@tanstack/react-table": "^8.21.3",
     "@tiptap/core": "^3.20.0",
+    "@tiptap/extension-collaboration": "^3.20.0",
+    "@tiptap/extension-drag-handle": "^3.20.0",
     "@tiptap/extension-highlight": "^3.20.0",
     "@tiptap/extension-horizontal-rule": "^3.20.0",
     "@tiptap/extension-image": "^3.20.0",
     "@tiptap/extension-link": "^3.20.0",
     "@tiptap/extension-list": "^3.20.0",
+    "@tiptap/extension-node-range": "^3.20.0",
     "@tiptap/extension-subscript": "^3.20.0",
     "@tiptap/extension-superscript": "^3.20.0",
     "@tiptap/extension-text-align": "^3.20.0",
@@ -43,6 +46,7 @@
     "@tiptap/pm": "^3.20.0",
     "@tiptap/react": "^3.20.0",
     "@tiptap/starter-kit": "^3.20.0",
+    "@tiptap/y-tiptap": "^3.0.2",
     "@uiw/react-md-editor": "^4.0.11",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -54,7 +58,8 @@
     "react-hotkeys-hook": "^5.2.4",
     "react-markdown": "^9.0.1",
     "remark-gfm": "^4.0.1",
-    "tailwind-merge": "^3.4.1"
+    "tailwind-merge": "^3.4.1",
+    "yjs": "^13.6.29"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

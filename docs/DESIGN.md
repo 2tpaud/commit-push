@@ -246,8 +246,10 @@ body {
 - **폼 구성**: 제목(필수), **설명**(RichTextEditor), 카테고리(대·중·소분류), 태그, 연관 노트, DialogFooter(취소/노트 생성·수정).
 - **설명 필드**:
   - **RichTextEditor** (TipTap 기반, `src/components/RichTextEditor.tsx`) 사용. DB에는 **마크다운**으로 저장(`notes.description`).
-  - 상단 고정 툴바: Undo/Redo, 굵게/기울임/밑줄/취소선, 형광펜(드롭다운), 인라인 코드, 제목(본문·제목1~4, 드롭다운), 목록(글머리·번호·할 일, 드롭다운), 링크, 인용, 코드 블록, 정렬(왼쪽·가운데·오른쪽·양쪽). 드롭다운 메뉴는 **포탈**(`document.body`)로 렌더되어 overflow에 가리지 않음.
-  - 설명 영역: 기본 높이 220px, 최소 120px, 최대 280px, **resize-y**로 드래그하여 세로 크기 조절 가능. 커밋푸시 다이얼로그 메모와 동일하게 네이티브 리사이즈.
+  - **드래그 핸들**: Tiptap 공식 `@tiptap/extension-drag-handle` + `NodeRange` 사용. 블록 왼쪽에 그립이 표시되며, 드래그로 블록(단락·제목·목록·인용·수평선·코드 블록 등) 순서 변경 가능.
+  - 상단 고정 툴바: Undo/Redo, 제목(본문·제목1~4, 드롭다운), 목록(글머리·번호·할 일, 드롭다운), 인라인 코드, 굵게/기울임/밑줄/취소선, 형광펜(드롭다운), 링크, 인용, 코드 블록, 수평선, 정렬(왼쪽·가운데·오른쪽·양쪽). 툴바 아이콘 간 구분선(Redo–제목, 형광펜–굵게, 인라인코드–링크, 수평선–왼쪽정렬). 드롭다운 메뉴는 **포탈**로 렌더되어 overflow에 가리지 않음.
+  - **툴팁**: 모든 툴바 버튼 툴팁은 **영문** 표기, **아래쪽**(side="bottom") 노출. **제목·목록·형광펜·링크** 트리거는 드롭다운이 **열려 있을 때는 툴팁 미표시**(트리거에만 호버 시에만 툴팁 표시).
+  - 설명 영역: 기본 높이 220px, 최소 120px, 최대 280px, **resize-y**로 드래그하여 세로 크기 조절 가능. 커밋푸시 다이얼로그 메모와 동일하게 네이티브 리사이즈. 전체 선택(Ctrl+A) 시 선택 영역 하이라이트(::selection) 스타일 적용.
 - **한도**: 노트 생성 전 `getLimitsForPlan(plan).maxNotes`로 한도 초과 시 insert 차단 및 안내.
 
 ## 입력 필드 스타일
@@ -264,8 +266,9 @@ body {
 
 ### RichTextEditor (노트 설명)
 - **용도**: 새 노트/노트 수정 다이얼로그의 설명 필드. WYSIWYG 편집, 저장은 마크다운.
-- **구성**: TipTap + StarterKit(제목 1~4), Underline, Highlight(다색), TextAlign, Link, TaskList/TaskItem, Markdown 확장. 상단 고정 툴바, 드롭다운(제목·목록·형광펜·링크)은 포탈로 표시.
-- **스타일**: 툴바 버튼·드롭다운 트리거는 선택 시 `border-primary bg-primary/10 text-primary`, 미선택 시 `border-transparent text-muted-foreground`. 한 줄에 안 들어가면 툴바는 `flex-wrap`으로 줄바꿈.
+- **구성**: TipTap + StarterKit(제목 1~4), Underline, Highlight(다색), TextAlign, Link, TaskList/TaskItem, HorizontalRule, Markdown, NodeRange, DragHandle(공식 확장). 상단 고정 툴바, 드롭다운(제목·목록·형광펜·링크)은 포탈로 표시. 블록 드래그로 순서 변경 시 공식 Drag Handle 사용.
+- **툴팁**: 영문 표기, 툴바 버튼 아래쪽 노출. 제목·목록·형광펜·링크는 **드롭다운이 열려 있을 때 툴팁 비표시**.
+- **스타일**: 툴바 버튼·드롭다운 트리거는 선택 시 `border-primary bg-primary/10 text-primary`, 미선택 시 `border-transparent text-muted-foreground`. 드롭다운 메뉴·트리거 호버 시 옅은 회색(`hover:bg-gray-100`). 한 줄에 안 들어가면 툴바는 `flex-wrap`으로 줄바꿈. 선택 영역(::selection) 하이라이트 스타일 적용.
 
 ## 배지(Badge) 스타일
 

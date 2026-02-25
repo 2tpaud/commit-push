@@ -9,8 +9,10 @@ import { TextAlign } from '@tiptap/extension-text-align'
 import { Link } from '@tiptap/extension-link'
 import { TaskList } from '@tiptap/extension-list/task-list'
 import { TaskItem } from '@tiptap/extension-list/task-item'
+import HorizontalRule from '@tiptap/extension-horizontal-rule'
+import { NodeRange } from '@tiptap/extension-node-range'
+import DragHandle from '@tiptap/extension-drag-handle'
 import { useEffect, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
 import {
   Bold,
   Italic,
@@ -34,7 +36,9 @@ import {
   CheckSquare,
   Undo2,
   Redo2,
+  SeparatorHorizontal,
 } from 'lucide-react'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 
 interface RichTextEditorProps {
   value: string
@@ -64,6 +68,21 @@ export default function RichTextEditor({
       Link.configure({ openOnClick: false }),
       TaskList,
       TaskItem.configure({ nested: true }),
+      HorizontalRule,
+      NodeRange,
+      DragHandle.configure({
+        render: () => {
+          const el = document.createElement('div')
+          el.className = 'rte-drag-handle'
+          el.setAttribute('aria-hidden', 'true')
+          el.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="9" cy="6" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="9" cy="18" r="1.5"/><circle cx="15" cy="6" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="15" cy="18" r="1.5"/></svg>'
+          return el
+        },
+        computePositionConfig: { placement: 'left-start', strategy: 'absolute' },
+        nested: {
+          edgeDetection: { threshold: -16 },
+        },
+      }),
       Markdown.configure({ markedOptions: { gfm: true } }),
     ],
     content: value || '',
@@ -92,6 +111,21 @@ export default function RichTextEditor({
     isExternalUpdateRef.current = false
   }, [editor, value])
 
+  // 설명창 진입 시 선택 영역(드래그)처럼 잡히지 않고 바로 일반 커서로
+  useEffect(() => {
+    if (!editor) return
+    const collapseSelection = () => {
+      const { from, to } = editor.state.selection
+      if (from !== to) {
+        editor.commands.setTextSelection(from)
+      }
+    }
+    editor.on('focus', collapseSelection)
+    return () => {
+      editor.off('focus', collapseSelection)
+    }
+  }, [editor])
+
   if (!editor) {
     return (
       <div
@@ -103,79 +137,197 @@ export default function RichTextEditor({
 
   return (
     <div
-      className={`rich-text-editor-root flex h-full flex-col overflow-hidden rounded-lg bg-background ${className ?? ''}`}
+      className={`rich-text-editor-root flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden rounded-lg bg-background ${className ?? ''}`}
       style={height != null ? { height, minHeight: 160 } : { minHeight: 160 }}
     >
       <div
-        className="flex flex-wrap items-center gap-0.5 border-b border-border bg-muted/50 px-1.5 py-1"
+        className="flex min-w-0 flex-nowrap items-center gap-0.5 border-b border-border bg-muted/50 px-1.5 py-1"
         onMouseDown={(e) => e.preventDefault()}
       >
-        <BubbleBtn
-          onClick={() => editor.chain().focus().undo().run()}
-          isActive={false}
-          title="실행 취소 (Undo)"
-          disabled={!editor.can().undo()}
-        >
-          <Undo2 className="h-4 w-4" />
-        </BubbleBtn>
-        <BubbleBtn
-          onClick={() => editor.chain().focus().redo().run()}
-          isActive={false}
-          title="다시 실행 (Redo)"
-          disabled={!editor.can().redo()}
-        >
-          <Redo2 className="h-4 w-4" />
-        </BubbleBtn>
-        <span className="mx-0.5 h-4 shrink-0 w-px bg-border" />
-        <BubbleBtn onClick={() => editor.chain().focus().toggleBold().run()} isActive={editor.isActive('bold')} title="굵게">
-          <Bold className="h-4 w-4" />
-        </BubbleBtn>
-        <BubbleBtn onClick={() => editor.chain().focus().toggleItalic().run()} isActive={editor.isActive('italic')} title="기울임">
-          <Italic className="h-4 w-4" />
-        </BubbleBtn>
-        <BubbleBtn onClick={() => editor.chain().focus().toggleUnderline().run()} isActive={editor.isActive('underline')} title="밑줄">
-          <UnderlineIcon className="h-4 w-4" />
-        </BubbleBtn>
-        <BubbleBtn onClick={() => editor.chain().focus().toggleStrike().run()} isActive={editor.isActive('strike')} title="취소선">
-          <Strikethrough className="h-4 w-4" />
-        </BubbleBtn>
-        <HighlightDropdown editor={editor} />
-        <BubbleBtn onClick={() => editor.chain().focus().toggleCode().run()} isActive={editor.isActive('code')} title="인라인 코드">
-          <Code className="h-4 w-4" />
-        </BubbleBtn>
-        <span className="mx-0.5 h-4 shrink-0 w-px bg-border" />
-        <HeadingDropdown editor={editor} />
-        <span className="mx-0.5 h-4 shrink-0 w-px bg-border" />
-        <ListDropdown editor={editor} />
-        <LinkButton editor={editor} />
-        <BubbleBtn onClick={() => editor.chain().focus().toggleBlockquote().run()} isActive={editor.isActive('blockquote')} title="인용">
-          <Quote className="h-4 w-4" />
-        </BubbleBtn>
-        <BubbleBtn onClick={() => editor.chain().focus().toggleCodeBlock().run()} isActive={editor.isActive('codeBlock')} title="코드 블록">
-          <Code className="h-4 w-4" />
-        </BubbleBtn>
-        <span className="mx-0.5 h-4 shrink-0 w-px bg-border" />
-        <BubbleBtn onClick={() => editor.chain().focus().setTextAlign('left').run()} isActive={editor.isActive({ textAlign: 'left' })} title="왼쪽 정렬">
-          <AlignLeft className="h-4 w-4" />
-        </BubbleBtn>
-        <BubbleBtn onClick={() => editor.chain().focus().setTextAlign('center').run()} isActive={editor.isActive({ textAlign: 'center' })} title="가운데 정렬">
-          <AlignCenter className="h-4 w-4" />
-        </BubbleBtn>
-        <BubbleBtn onClick={() => editor.chain().focus().setTextAlign('right').run()} isActive={editor.isActive({ textAlign: 'right' })} title="오른쪽 정렬">
-          <AlignRight className="h-4 w-4" />
-        </BubbleBtn>
-        <BubbleBtn onClick={() => editor.chain().focus().setTextAlign('justify').run()} isActive={editor.isActive({ textAlign: 'justify' })} title="양쪽 정렬">
-          <AlignJustify className="h-4 w-4" />
-        </BubbleBtn>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="inline-flex shrink-0">
+              <BubbleBtn
+                onClick={() => editor.chain().focus().undo().run()}
+                isActive={false}
+                disabled={!editor.can().undo()}
+              >
+                <Undo2 className="h-4 w-4" />
+              </BubbleBtn>
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Undo</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="inline-flex shrink-0">
+              <BubbleBtn
+                onClick={() => editor.chain().focus().redo().run()}
+                isActive={false}
+                disabled={!editor.can().redo()}
+              >
+                <Redo2 className="h-4 w-4" />
+              </BubbleBtn>
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Redo</TooltipContent>
+        </Tooltip>
+        <span className="mx-0.5 h-5 shrink-0 w-px bg-gray-300 dark:bg-gray-600" aria-hidden />
+        <span className="inline-flex shrink-0">
+          <HeadingDropdown editor={editor} />
+        </span>
+        <span className="inline-flex shrink-0">
+          <ListDropdown editor={editor} />
+        </span>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="inline-flex shrink-0">
+              <BubbleBtn onClick={() => editor.chain().focus().toggleCode().run()} isActive={editor.isActive('code')}>
+                <Code className="h-4 w-4" />
+              </BubbleBtn>
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Inline code</TooltipContent>
+        </Tooltip>
+        <span className="mx-0.5 h-5 shrink-0 w-px bg-gray-300 dark:bg-gray-600" aria-hidden />
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="inline-flex shrink-0">
+              <BubbleBtn onClick={() => editor.chain().focus().toggleBold().run()} isActive={editor.isActive('bold')}>
+                <Bold className="h-4 w-4" />
+              </BubbleBtn>
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Bold</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="inline-flex shrink-0">
+              <BubbleBtn onClick={() => editor.chain().focus().toggleItalic().run()} isActive={editor.isActive('italic')}>
+                <Italic className="h-4 w-4" />
+              </BubbleBtn>
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Italic</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="inline-flex shrink-0">
+              <BubbleBtn onClick={() => editor.chain().focus().toggleUnderline().run()} isActive={editor.isActive('underline')}>
+                <UnderlineIcon className="h-4 w-4" />
+              </BubbleBtn>
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Underline</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="inline-flex shrink-0">
+              <BubbleBtn onClick={() => editor.chain().focus().toggleStrike().run()} isActive={editor.isActive('strike')}>
+                <Strikethrough className="h-4 w-4" />
+              </BubbleBtn>
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Strike</TooltipContent>
+        </Tooltip>
+        <span className="inline-flex shrink-0">
+          <HighlightDropdown editor={editor} />
+        </span>
+        <span className="mx-0.5 h-5 shrink-0 w-px bg-gray-300 dark:bg-gray-600" aria-hidden />
+        <span className="inline-flex shrink-0">
+          <LinkButton editor={editor} />
+        </span>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="inline-flex shrink-0">
+              <BubbleBtn onClick={() => editor.chain().focus().toggleBlockquote().run()} isActive={editor.isActive('blockquote')}>
+                <Quote className="h-4 w-4" />
+              </BubbleBtn>
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Blockquote</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="inline-flex shrink-0">
+              <BubbleBtn onClick={() => editor.chain().focus().toggleCodeBlock().run()} isActive={editor.isActive('codeBlock')}>
+                <Code className="h-4 w-4" />
+              </BubbleBtn>
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Code Block</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="inline-flex shrink-0">
+              <BubbleBtn onClick={() => editor.chain().focus().setHorizontalRule().run()} isActive={false}>
+                <SeparatorHorizontal className="h-4 w-4" />
+              </BubbleBtn>
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Horizontal rule</TooltipContent>
+        </Tooltip>
+        <span className="mx-0.5 h-5 shrink-0 w-px bg-gray-300 dark:bg-gray-600" aria-hidden />
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="inline-flex shrink-0">
+              <BubbleBtn onClick={() => editor.chain().focus().setTextAlign('left').run()} isActive={editor.isActive({ textAlign: 'left' })}>
+                <AlignLeft className="h-4 w-4" />
+              </BubbleBtn>
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Align left</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="inline-flex shrink-0">
+              <BubbleBtn onClick={() => editor.chain().focus().setTextAlign('center').run()} isActive={editor.isActive({ textAlign: 'center' })}>
+                <AlignCenter className="h-4 w-4" />
+              </BubbleBtn>
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Align center</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="inline-flex shrink-0">
+              <BubbleBtn onClick={() => editor.chain().focus().setTextAlign('right').run()} isActive={editor.isActive({ textAlign: 'right' })}>
+                <AlignRight className="h-4 w-4" />
+              </BubbleBtn>
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Align right</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="inline-flex shrink-0">
+              <BubbleBtn onClick={() => editor.chain().focus().setTextAlign('justify').run()} isActive={editor.isActive({ textAlign: 'justify' })}>
+                <AlignJustify className="h-4 w-4" />
+              </BubbleBtn>
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Align justify</TooltipContent>
+        </Tooltip>
       </div>
-      <div className="min-h-0 flex-1 overflow-auto">
+      <div className="relative min-h-0 flex-1 overflow-x-hidden overflow-y-auto" data-rte-scroll-container>
         <EditorContent editor={editor} />
       </div>
       <style
         dangerouslySetInnerHTML={{
           __html: `
-            .rich-text-editor-root .ProseMirror { min-height: 100%; min-height: 120px; }
+            .rich-text-editor-root [data-rte-scroll-container] > div { position: relative; }
+            .rich-text-editor-root .ProseMirror { min-height: 100%; min-height: 120px; caret-color: currentColor; padding-left: 2rem; overflow-wrap: break-word; }
+            .rte-drag-handle { width: 20px; height: 24px; display: flex; align-items: center; justify-content: center; cursor: grab; color: #64748b; background: #f1f5f9; border-radius: 4px; z-index: 10; border: 1px solid #e2e8f0; pointer-events: auto; user-select: none; flex-shrink: 0; }
+            .rte-drag-handle:hover { background: #e2e8f0; color: #475569; }
+            .dark .rte-drag-handle { color: #94a3b8; background: #334155; border-color: #475569; }
+            .dark .rte-drag-handle:hover { background: #475569; color: #cbd5e1; }
+            .rte-drag-handle:active { cursor: grabbing; }
+            .rte-drag-handle-dragging { opacity: 0.9; }
             .rich-text-editor-root .ProseMirror-focused { outline: none; }
+            .rich-text-editor-root .ProseMirror::selection { background: #b4d5fe; }
+            .rich-text-editor-root .ProseMirror *::selection { background: #b4d5fe; }
+            .dark .rich-text-editor-root .ProseMirror::selection { background: #1e3a5f; }
+            .dark .rich-text-editor-root .ProseMirror *::selection { background: #1e3a5f; }
             .rich-text-editor-root .ProseMirror p.is-editor-empty:first-child::before {
               content: attr(data-placeholder);
               float: left;
@@ -276,6 +428,17 @@ export default function RichTextEditor({
             .rich-text-editor-root .rich-text-editor-body h4 { font-size: 1rem; font-weight: 600; margin: 0.4em 0 0.2em; }
             .rich-text-editor-root .rich-text-editor-body a { color: #2563eb; text-decoration: underline; }
             .rich-text-editor-root .rich-text-editor-body a:hover { text-decoration: none; }
+            .rich-text-editor-root .rich-text-editor-body hr {
+              border: none;
+              border-top: 1px solid #cbd5e1;
+              margin: 1em 0;
+            }
+            .dark .rich-text-editor-root .rich-text-editor-body hr { border-top-color: #475569; }
+            .rte-dropdown-menu button { cursor: pointer; border-radius: 2px; transition: background-color 0.15s; }
+            .rte-dropdown-menu button:hover { background-color: #f3f4f6; }
+            .dark .rte-dropdown-menu button:hover { background-color: #374151; }
+            .rte-dropdown-trigger:hover { background-color: #f3f4f6 !important; }
+            .dark .rte-dropdown-trigger:hover { background-color: #1f2937 !important; }
           `,
         }}
       />
@@ -291,259 +454,349 @@ const HIGHLIGHT_COLORS = [
   { name: '연한 주황', color: '#fed7aa' },
 ]
 
-function InlineDropdown({
-  trigger,
-  children,
-  open,
-  onOpenChange,
-  placement = 'below',
-}: {
-  trigger: React.ReactNode
-  children: React.ReactNode
-  open: boolean
-  onOpenChange: (v: boolean) => void
-  placement?: 'above' | 'below'
-}) {
-  const triggerRef = useRef<HTMLDivElement>(null)
-  const menuRef = useRef<HTMLDivElement>(null)
-  const [position, setPosition] = useState({ top: 0, left: 0 })
-
-  useEffect(() => {
-    if (!open || !triggerRef.current) return
-    const rect = triggerRef.current.getBoundingClientRect()
-    setPosition({
-      left: rect.left,
-      top: placement === 'below' ? rect.bottom + 4 : rect.top - 8,
-    })
-  }, [open, placement])
-
-  useEffect(() => {
-    if (!open) return
-    const close = (e: MouseEvent) => {
-      const target = e.target as Node
-      if (triggerRef.current?.contains(target) || menuRef.current?.contains(target)) return
-      onOpenChange(false)
-    }
-    document.addEventListener('mousedown', close)
-    return () => document.removeEventListener('mousedown', close)
-  }, [open, onOpenChange])
-
-  const menuEl = open && (
-    <div
-      ref={menuRef}
-      className="fixed z-[99999] min-w-[8rem] rounded-md border border-border bg-white py-1 shadow-lg dark:bg-gray-900"
-      style={{ left: position.left, top: position.top }}
-      onMouseDown={(e) => e.preventDefault()}
-    >
-      {children}
-    </div>
-  )
-
-  return (
-    <div className="relative" ref={triggerRef}>
-      <div onMouseDown={(e) => e.preventDefault()} onClick={() => onOpenChange(!open)}>
-        {trigger}
-      </div>
-      {typeof document !== 'undefined' && menuEl && createPortal(menuEl, document.body)}
-    </div>
-  )
-}
-
 function HighlightDropdown({ editor }: { editor: ReturnType<typeof useEditor> }) {
   const [open, setOpen] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
   const isActive = editor?.isActive('highlight') ?? false
   const currentColor = (editor?.getAttributes('highlight').color as string) || HIGHLIGHT_COLORS[0].color
-  return (
-    <InlineDropdown open={open} onOpenChange={setOpen} placement="below" trigger={
-      <button
-        type="button"
-        title="형광펜"
-        className={`flex h-7 min-w-[2rem] shrink-0 items-center justify-center gap-0.5 rounded-md border px-1.5 text-xs transition-colors hover:bg-muted active:bg-muted/80 ${
-          isActive ? 'border-primary bg-primary/10 text-primary font-semibold' : 'border-transparent text-muted-foreground'
-        }`}
-      >
-        <span className="flex h-4 w-4 items-center justify-center rounded border border-border" style={{ backgroundColor: currentColor }} />
-        <ChevronDown className="h-3.5 w-3.5 opacity-70" />
-      </button>
-    }>
-      {HIGHLIGHT_COLORS.map(({ name, color }) => (
-        <button
-          key={color}
-          type="button"
-          className="flex w-full items-center gap-2 px-2 py-1.5 text-left text-sm hover:bg-muted"
-          onMouseDown={(e) => {
-            e.preventDefault()
-            editor?.chain().focus().setHighlight({ color }).run()
-            setOpen(false)
-          }}
-        >
-          <span className="h-4 w-4 rounded border border-border" style={{ backgroundColor: color }} />
-          {name}
-        </button>
-      ))}
-    </InlineDropdown>
-  )
-}
 
-function HeadingDropdown({ editor }: { editor: ReturnType<typeof useEditor> }) {
-  const [open, setOpen] = useState(false)
-  const level = editor?.isActive('heading', { level: 1 }) ? 1 : editor?.isActive('heading', { level: 2 }) ? 2 : editor?.isActive('heading', { level: 3 }) ? 3 : editor?.isActive('heading', { level: 4 }) ? 4 : 0
-  const label = level === 0 ? '본문' : `제목 ${level}`
-  const isActive = (editor?.isActive('heading') ?? false)
-  const trigger = (
-    <button
-      type="button"
-      title="제목"
-      className={`flex h-7 min-w-[3.5rem] shrink-0 items-center justify-center gap-0.5 rounded-md border px-1.5 text-xs transition-colors hover:bg-muted active:bg-muted/80 ${
-        isActive ? 'border-primary bg-primary/10 text-primary font-semibold' : 'border-transparent text-muted-foreground'
-      }`}
-    >
-      {level === 1 && <Heading1 className="h-4 w-4" />}
-      {level === 2 && <Heading2 className="h-4 w-4" />}
-      {level === 3 && <Heading3 className="h-4 w-4" />}
-      {level === 4 && <Heading4 className="h-4 w-4" />}
-      {level === 0 && <Type className="h-4 w-4" />}
-      <span className="text-xs font-medium">{label}</span>
-    </button>
-  )
-  const run = (fn: () => void) => {
-    fn()
-    setOpen(false)
-  }
-  return (
-    <InlineDropdown open={open} onOpenChange={setOpen} trigger={trigger} placement="below">
-      <button type="button" className="flex w-full items-center gap-2 px-2 py-1.5 text-sm hover:bg-muted" onMouseDown={(e) => { e.preventDefault(); run(() => editor?.chain().focus().setParagraph().run()) }}>
-        <Type className="h-4 w-4" /> 본문
-      </button>
-      {([1, 2, 3, 4] as const).map((l) => (
-        <button key={l} type="button" className="flex w-full items-center gap-2 px-2 py-1.5 text-sm hover:bg-muted" onMouseDown={(e) => { e.preventDefault(); run(() => editor?.chain().focus().toggleHeading({ level: l }).run()) }}>
-          {l === 1 && <Heading1 className="h-4 w-4" />}
-          {l === 2 && <Heading2 className="h-4 w-4" />}
-          {l === 3 && <Heading3 className="h-4 w-4" />}
-          {l === 4 && <Heading4 className="h-4 w-4" />}
-          제목 {l}
-        </button>
-      ))}
-    </InlineDropdown>
-  )
-}
-
-function ListDropdown({ editor }: { editor: ReturnType<typeof useEditor> }) {
-  const [open, setOpen] = useState(false)
-  const isBullet = editor?.isActive('bulletList') ?? false
-  const isOrdered = editor?.isActive('orderedList') ?? false
-  const isTask = editor?.isActive('taskList') ?? false
-  const isActive = isBullet || isOrdered || isTask
-  const trigger = (
-    <button
-      type="button"
-      title="목록"
-      className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md border text-xs transition-colors hover:bg-muted active:bg-muted/80 ${
-        isActive ? 'border-primary bg-primary/10 text-primary font-semibold' : 'border-transparent text-muted-foreground'
-      }`}
-    >
-      {isTask && <CheckSquare className="h-4 w-4" />}
-      {isBullet && !isTask && <List className="h-4 w-4" />}
-      {isOrdered && <ListOrdered className="h-4 w-4" />}
-      {!isBullet && !isOrdered && !isTask && <List className="h-4 w-4 opacity-70" />}
-    </button>
-  )
-  const run = (fn: () => void) => {
-    fn()
-    setOpen(false)
-  }
-  return (
-    <InlineDropdown open={open} onOpenChange={setOpen} trigger={trigger} placement="below">
-      <button type="button" className="flex w-full items-center gap-2 px-2 py-1.5 text-sm hover:bg-muted" onMouseDown={(e) => { e.preventDefault(); run(() => editor?.chain().focus().toggleBulletList().run()) }}>
-        <List className="h-4 w-4" /> 글머리 목록
-      </button>
-      <button type="button" className="flex w-full items-center gap-2 px-2 py-1.5 text-sm hover:bg-muted" onMouseDown={(e) => { e.preventDefault(); run(() => editor?.chain().focus().toggleOrderedList().run()) }}>
-        <ListOrdered className="h-4 w-4" /> 번호 목록
-      </button>
-      <button type="button" className="flex w-full items-center gap-2 px-2 py-1.5 text-sm hover:bg-muted" onMouseDown={(e) => { e.preventDefault(); run(() => editor?.chain().focus().toggleTaskList().run()) }}>
-        <CheckSquare className="h-4 w-4" /> 할 일 목록
-      </button>
-    </InlineDropdown>
-  )
-}
-
-function LinkButton({ editor }: { editor: ReturnType<typeof useEditor> }) {
-  const [open, setOpen] = useState(false)
-  const [url, setUrl] = useState('')
-  const triggerRef = useRef<HTMLDivElement>(null)
-  const menuRef = useRef<HTMLDivElement>(null)
-  const [position, setPosition] = useState({ top: 0, left: 0 })
-  const isLink = editor?.isActive('link') ?? false
-  const currentHref = editor?.getAttributes('link').href ?? ''
-  const applyLink = () => {
-    if (url.trim()) {
-      editor?.chain().focus().setLink({ href: url.trim() }).run()
-    } else {
-      editor?.chain().focus().unsetLink().run()
-    }
-    setUrl('')
-    setOpen(false)
-  }
-  useEffect(() => {
-    if (!open || !triggerRef.current) return
-    const rect = triggerRef.current.getBoundingClientRect()
-    setPosition({ left: rect.left, top: rect.bottom + 4 })
-  }, [open])
   useEffect(() => {
     if (!open) return
     const close = (e: MouseEvent) => {
       const target = e.target as Node
-      if (triggerRef.current?.contains(target) || menuRef.current?.contains(target)) return
+      if (containerRef.current?.contains(target)) return
       setOpen(false)
     }
     document.addEventListener('mousedown', close)
     return () => document.removeEventListener('mousedown', close)
   }, [open])
-  const menuEl = open && (
-    <div
-      ref={menuRef}
-      className="fixed z-[99999] flex flex-col gap-1.5 rounded-md border border-border bg-white p-2 shadow-lg dark:bg-gray-900"
-      style={{ left: position.left, top: position.top }}
-      onMouseDown={(e) => e.preventDefault()}
-    >
-      <input
-        type="url"
-        value={url}
-        onChange={(e) => setUrl(e.target.value)}
-        onKeyDown={(e) => e.key === 'Enter' && applyLink()}
-        placeholder="https://..."
-        className="w-48 rounded border border-input bg-background px-2 py-1 text-sm"
-      />
-      <div className="flex gap-1">
-        <button type="button" className="rounded bg-primary px-2 py-1 text-xs text-primary-foreground" onMouseDown={(e) => { e.preventDefault(); applyLink() }}>
-          적용
-        </button>
-        {isLink && (
-          <button type="button" className="rounded border px-2 py-1 text-xs" onMouseDown={(e) => { e.preventDefault(); setUrl(''); editor?.chain().focus().unsetLink().run(); setOpen(false) }}>
-            제거
+
+  return (
+    <div ref={containerRef} className="relative inline-flex">
+      <Tooltip open={open ? false : undefined}>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            className={`flex h-7 min-w-[2rem] shrink-0 items-center justify-center gap-0.5 rounded-md border px-1.5 text-xs transition-colors hover:bg-gray-100 active:bg-gray-200 dark:hover:bg-gray-800 dark:active:bg-gray-700 ${
+              open ? 'bg-gray-100 dark:bg-gray-800' : ''
+            } ${
+              isActive ? 'border-primary bg-primary/10 text-primary font-semibold' : 'border-transparent text-muted-foreground'
+            }`}
+            onClick={(e) => {
+              e.preventDefault()
+              setOpen((v) => !v)
+            }}
+          >
+            <span
+              className="flex h-4 w-4 items-center justify-center rounded border border-border"
+              style={{ backgroundColor: currentColor }}
+            />
+            <ChevronDown className="h-4 w-4 opacity-70" />
           </button>
-        )}
-      </div>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">Highlight</TooltipContent>
+      </Tooltip>
+      {open && (
+        <div className="rte-dropdown-menu absolute left-0 top-[calc(100%+4px)] z-50 w-fit min-w-0 rounded-md border border-border bg-white p-1 shadow-lg dark:bg-gray-900">
+          {HIGHLIGHT_COLORS.map(({ color }) => (
+            <button
+              key={color}
+              type="button"
+              className="flex shrink-0 items-center justify-center rounded p-1 text-sm"
+              onClick={(e) => {
+                e.preventDefault()
+                setOpen(false)
+                editor?.chain().focus().setHighlight({ color }).run()
+              }}
+            >
+              <span className="h-4 w-4 rounded border border-border" style={{ backgroundColor: color }} />
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   )
+}
+
+function HeadingDropdown({ editor }: { editor: ReturnType<typeof useEditor> }) {
+  const [open, setOpen] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const level = editor?.isActive('heading', { level: 1 }) ? 1 : editor?.isActive('heading', { level: 2 }) ? 2 : editor?.isActive('heading', { level: 3 }) ? 3 : editor?.isActive('heading', { level: 4 }) ? 4 : 0
+  const isActive = editor?.isActive('heading') ?? false
+
+  useEffect(() => {
+    if (!open) return
+    const close = (e: MouseEvent) => {
+      const target = e.target as Node
+      if (containerRef.current?.contains(target)) return
+      setOpen(false)
+    }
+    document.addEventListener('mousedown', close)
+    return () => document.removeEventListener('mousedown', close)
+  }, [open])
+
+  const run = (fn: () => void) => {
+    fn()
+    setOpen(false)
+  }
+
   return (
-    <div className="relative" ref={triggerRef}>
-      <div onMouseDown={(e) => e.preventDefault()}>
-        <button
-          type="button"
-          title="링크"
-          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md border text-xs transition-colors hover:bg-muted active:bg-muted/80 ${
-            isLink ? 'border-primary bg-primary/10 text-primary font-semibold' : 'border-transparent text-muted-foreground'
-          }`}
-          onClick={() => {
-            setOpen(!open)
-            setUrl(currentHref || '')
-          }}
-        >
-          <LinkIcon className="h-4 w-4" />
-        </button>
-      </div>
-      {typeof document !== 'undefined' && menuEl && createPortal(menuEl, document.body)}
+    <div ref={containerRef} className="relative inline-flex">
+      <Tooltip open={open ? false : undefined}>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md border text-xs transition-colors hover:bg-gray-100 active:bg-gray-200 dark:hover:bg-gray-800 dark:active:bg-gray-700 ${
+              open ? 'bg-gray-100 dark:bg-gray-800' : ''
+            } ${
+              isActive ? 'border-primary bg-primary/10 text-primary font-semibold' : 'border-transparent text-muted-foreground'
+            }`}
+            onClick={(e) => {
+              e.preventDefault()
+              setOpen((v) => !v)
+            }}
+          >
+            {level === 1 && <Heading1 className="h-4 w-4" />}
+            {level === 2 && <Heading2 className="h-4 w-4" />}
+            {level === 3 && <Heading3 className="h-4 w-4" />}
+            {level === 4 && <Heading4 className="h-4 w-4" />}
+            {level === 0 && <Type className="h-4 w-4" />}
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">Heading</TooltipContent>
+      </Tooltip>
+      {open && (
+        <div className="rte-dropdown-menu absolute left-0 top-[calc(100%+4px)] z-50 min-w-[8rem] rounded-md border border-border bg-white py-1 shadow-lg dark:bg-gray-900">
+          <button
+            type="button"
+            className="flex w-full items-center gap-2 px-2 py-1.5 text-sm"
+            onClick={(e) => {
+              e.preventDefault()
+              run(() => editor?.chain().focus().setParagraph().run())
+            }}
+          >
+            <Type className="h-4 w-4" /> Paragraph
+          </button>
+          {([1, 2, 3, 4] as const).map((l) => (
+            <button
+              key={l}
+              type="button"
+              className="flex w-full items-center gap-2 px-2 py-1.5 text-sm"
+              onClick={(e) => {
+                e.preventDefault()
+                run(() => editor?.chain().focus().toggleHeading({ level: l }).run())
+              }}
+            >
+              {l === 1 && <Heading1 className="h-4 w-4" />}
+              {l === 2 && <Heading2 className="h-4 w-4" />}
+              {l === 3 && <Heading3 className="h-4 w-4" />}
+              {l === 4 && <Heading4 className="h-4 w-4" />}
+              Heading {l}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ListDropdown({ editor }: { editor: ReturnType<typeof useEditor> }) {
+  const [open, setOpen] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const isBullet = editor?.isActive('bulletList') ?? false
+  const isOrdered = editor?.isActive('orderedList') ?? false
+  const isTask = editor?.isActive('taskList') ?? false
+  const isActive = isBullet || isOrdered || isTask
+
+  useEffect(() => {
+    if (!open) return
+    const close = (e: MouseEvent) => {
+      const target = e.target as Node
+      if (containerRef.current?.contains(target)) return
+      setOpen(false)
+    }
+    document.addEventListener('mousedown', close)
+    return () => document.removeEventListener('mousedown', close)
+  }, [open])
+
+  const run = (fn: () => void) => {
+    fn()
+    setOpen(false)
+  }
+
+  return (
+    <div ref={containerRef} className="relative inline-flex">
+      <Tooltip open={open ? false : undefined}>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md border text-xs transition-colors hover:bg-gray-100 active:bg-gray-200 dark:hover:bg-gray-800 dark:active:bg-gray-700 ${
+              open ? 'bg-gray-100 dark:bg-gray-800' : ''
+            } ${
+              isActive ? 'border-primary bg-primary/10 text-primary font-semibold' : 'border-transparent text-muted-foreground'
+            }`}
+            onClick={(e) => {
+              e.preventDefault()
+              setOpen((v) => !v)
+            }}
+          >
+            {isTask && <CheckSquare className="h-4 w-4" />}
+            {isBullet && !isTask && <List className="h-4 w-4" />}
+            {isOrdered && <ListOrdered className="h-4 w-4" />}
+            {!isBullet && !isOrdered && !isTask && <List className="h-4 w-4 opacity-70" />}
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">List</TooltipContent>
+      </Tooltip>
+      {open && (
+        <div className="rte-dropdown-menu absolute left-0 top-[calc(100%+4px)] z-50 min-w-[8rem] rounded-md border border-border bg-white py-1 shadow-lg dark:bg-gray-900">
+          <button
+            type="button"
+            className="flex w-full items-center gap-2 px-2 py-1.5 text-sm"
+            onClick={(e) => {
+              e.preventDefault()
+              run(() => editor?.chain().focus().toggleBulletList().run())
+            }}
+          >
+            <List className="h-4 w-4" /> Bullet list
+          </button>
+          <button
+            type="button"
+            className="flex w-full items-center gap-2 px-2 py-1.5 text-sm"
+            onClick={(e) => {
+              e.preventDefault()
+              run(() => editor?.chain().focus().toggleOrderedList().run())
+            }}
+          >
+            <ListOrdered className="h-4 w-4" /> Ordered list
+          </button>
+          <button
+            type="button"
+            className="flex w-full items-center gap-2 px-2 py-1.5 text-sm"
+            onClick={(e) => {
+              e.preventDefault()
+              run(() => editor?.chain().focus().toggleTaskList().run())
+            }}
+          >
+            <CheckSquare className="h-4 w-4" /> Task list
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function normalizeLinkHref(input: string): string {
+  const trimmed = input.trim()
+  if (!trimmed) return ''
+  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(trimmed)) return trimmed
+  return `https://${trimmed}`
+}
+
+function LinkButton({ editor }: { editor: ReturnType<typeof useEditor> }) {
+  const [open, setOpen] = useState(false)
+  const [url, setUrl] = useState('')
+  const containerRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const isLink = editor?.isActive('link') ?? false
+  const currentHref = (editor?.getAttributes('link').href as string) ?? ''
+
+  const applyLink = () => {
+    if (!editor) return
+    const href = url.trim() ? normalizeLinkHref(url) : ''
+    setUrl('')
+    setOpen(false)
+    setTimeout(() => {
+      if (href) {
+        editor.chain().focus().setLink({ href }).run()
+      } else {
+        editor.chain().focus().unsetLink().run()
+      }
+    }, 0)
+  }
+
+  useEffect(() => {
+    if (open) {
+      requestAnimationFrame(() => inputRef.current?.focus())
+    }
+  }, [open])
+
+  useEffect(() => {
+    if (!open) return
+    const close = (e: MouseEvent) => {
+      const target = e.target as Node
+      if (containerRef.current?.contains(target)) return
+      setOpen(false)
+    }
+    document.addEventListener('mousedown', close)
+    return () => document.removeEventListener('mousedown', close)
+  }, [open])
+
+  return (
+    <div className="relative inline-flex" ref={containerRef}>
+      <Tooltip open={open ? false : undefined}>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md border text-xs transition-colors hover:bg-gray-100 active:bg-gray-200 dark:hover:bg-gray-800 dark:active:bg-gray-700 ${
+              isLink ? 'border-primary bg-primary/10 text-primary font-semibold' : 'border-transparent text-muted-foreground'
+            }`}
+            onClick={(e) => {
+              e.preventDefault()
+              setOpen((v) => !v)
+              setUrl(typeof currentHref === 'string' ? currentHref : '')
+            }}
+          >
+            <LinkIcon className="h-4 w-4" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">Link</TooltipContent>
+      </Tooltip>
+      {open && (
+        <div className="absolute left-0 top-[calc(100%+4px)] z-50 flex flex-col gap-1.5 rounded-md border border-border bg-white p-2 shadow-lg dark:bg-gray-900">
+          <input
+            ref={inputRef}
+            type="url"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                applyLink()
+              }
+              if (e.key === 'Escape') setOpen(false)
+            }}
+            placeholder="https://..."
+            className="w-48 rounded border border-input bg-background px-2 py-1 text-sm"
+          />
+          <div className="flex gap-1">
+            <button
+              type="button"
+              className="rounded bg-primary px-2 py-1 text-xs text-primary-foreground hover:bg-primary/90"
+              onClick={(e) => {
+                e.preventDefault()
+                applyLink()
+              }}
+            >
+              적용
+            </button>
+            {isLink && (
+              <button
+                type="button"
+                className="rounded border px-2 py-1 text-xs hover:bg-gray-100 dark:hover:bg-gray-800"
+                onClick={(e) => {
+                  e.preventDefault()
+                  setOpen(false)
+                  setUrl('')
+                  setTimeout(() => editor?.chain().focus().unsetLink().run(), 0)
+                }}
+              >
+                제거
+              </button>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -551,22 +804,19 @@ function LinkButton({ editor }: { editor: ReturnType<typeof useEditor> }) {
 function BubbleBtn({
   onClick,
   isActive,
-  title,
   children,
   disabled = false,
 }: {
   onClick: () => void
   isActive: boolean
-  title: string
   children: React.ReactNode
   disabled?: boolean
 }) {
   return (
     <button
       type="button"
-      title={title}
       disabled={disabled}
-      className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md border text-xs transition-colors hover:bg-muted active:bg-muted/80 disabled:pointer-events-none disabled:opacity-50 ${
+      className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md border text-xs transition-colors hover:bg-gray-100 active:bg-gray-200 dark:hover:bg-gray-800 dark:active:bg-gray-700 disabled:pointer-events-none disabled:opacity-50 ${
         isActive ? 'border-primary bg-primary/10 text-primary font-semibold' : 'border-transparent text-muted-foreground'
       }`}
       onMouseDown={(e) => {
