@@ -220,8 +220,6 @@ export default function PlanPage() {
         amount_mismatch: '결제 금액이 일치하지 않습니다.',
         approval_failed: '승인 처리에 실패했습니다.',
         config_error: '결제 설정을 확인해 주세요.',
-        config_error_supabase: 'Supabase 설정이 없습니다. .env.local에 NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY를 넣고 서버를 재시작해 주세요.',
-        config_error_nicepay: '나이스페이 키가 없습니다. .env.local에 NEXT_PUBLIC_NICE_PAY_CLIENT_ID, NICE_PAY_SECRET_KEY를 넣고 서버를 재시작해 주세요.',
         update_failed: '플랜 반영에 실패했습니다.',
         unauthorized: '로그인이 필요합니다.',
         forbidden: '권한이 없습니다.',
