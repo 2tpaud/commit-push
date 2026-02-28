@@ -8,10 +8,11 @@
 
 - [ ] `.env.local`에 결제 관련 환경 변수 설정
   - `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` (return URL에서 결제 조회·갱신용, 결제 사용 시 필수)
-  - `NEXT_PUBLIC_NICE_PAY_CLIENT_ID`, `NICE_PAY_SECRET_KEY`, `NICE_PAY_MID`
+  - `NEXT_PUBLIC_NICE_PAY_CLIENT_ID` (나이스페이: **Server 승인** 타입), `NICE_PAY_SECRET_KEY` (**Basic 인증** 타입 권장)
+  - `NICE_PAY_MID` (선택, 미설정 시 clientId 사용), `NICE_PAY_MERCHANT_KEY` (선택, 레거시 승인 시에만)
   - `NICE_PAY_API_BASE` (테스트: `https://sandbox-api.nicepay.co.kr`)
   - `NEXT_PUBLIC_NICE_PAY_SDK_URL` (테스트: `https://sandbox-pay.nicepay.co.kr/v1/js/`)
-- [ ] 나이스페이 개발정보에서 테스트용 키 발급·등록
+- [ ] 나이스페이 개발정보에서 테스트용 키 발급·등록 (클라이언트 키: Server 승인, 시크릿 키: **Basic 인증**)
 - [ ] 로그인 상태에서 `/plan` 접근 가능한지 확인
 - [ ] Vercel 배포 시 위 환경 변수 동일하게 등록
   - `SUPABASE_SERVICE_ROLE_KEY` (결제 return·웹훅 필수)

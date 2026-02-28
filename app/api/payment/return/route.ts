@@ -128,19 +128,8 @@ export async function POST(request: Request) {
 
   const amtStr = String(payment.amount)
 
-  // 레거시 승인에 필요한 값이 없으면 form 키만 로그(전달되는 파라미터명 확인용)
-  if (!nextAppUrl || !authToken) {
-    console.error('[payment/return] legacy_params_missing', {
-      orderId,
-      tid,
-      formKeys: Object.keys(form),
-      hasMid: !!mid,
-      hasMerchantKey: !!merchantKey,
-    })
-  }
-
-  // 실결제(운영): U103 "사용자 인증타입이 맞지 않습니다" 방지 — 인증 응답의 NextAppURL + AuthToken으로 레거시 승인 사용
-  if (nextAppUrl && authToken && mid && merchantKey) {
+  // NICE_PAY_MERCHANT_KEY가 있을 때만 레거시 승인(pay_process.jsp) 사용. 없으면 v1 API(Basic 인증) 사용
+  if (process.env.NICE_PAY_MERCHANT_KEY && nextAppUrl && authToken && mid && merchantKey) {
     const ediDate = new Date()
       .toISOString()
       .replace(/[-:T]/g, '')

@@ -63,6 +63,11 @@
   - 결제 승인 검증은 나이스페이 승인 API 호출로 수행(위변조 방지).
 - **환경 변수**: `SUPABASE_SERVICE_ROLE_KEY` 필수(로컬·Vercel 모두). ANON KEY와 다름.
 
+**승인 방식: v1 API vs 레거시 (U103 / A301 대응)**
+- **U103**(사용자 인증타입이 맞지 않습니다): 실결제에서 v1 API 호출 시 나이스페이 시크릿 키가 **Token 인증** 타입이면 발생. → **Basic 인증** 타입 시크릿 키로 재발급 후 v1 API 사용.
+- **A301**(가맹점키 조회 오류): 레거시 승인(pay_process.jsp)은 **상점키(Merchant Key)** 로 SignData 생성. 가맹점 관리자에 상점키가 없으면 발생. → **가맹점키 없이** 운영하려면 **v1 API만** 사용.
+- **현재 동작**: `NICE_PAY_MERCHANT_KEY`가 **설정되어 있으면** 레거시 승인, **없으면** v1 API(Basic 인증)만 사용. 클라이언트 키는 **Server 승인**, 시크릿 키는 **Basic 인증** 타입 사용 권장.
+
 **check-expiry 401 수정 (배포 환경)**
 - **배경**: 배포 환경(www)에서 쿠키가 전달되지 않아 `GET /api/plan/check-expiry` 401 발생.
 - **구현**: 쿠키 세션 우선, 없으면 `Authorization: Bearer` 토큰으로 인증. layout에서 `access_token` 전달.
@@ -104,14 +109,15 @@ API 컴포넌트:
 - `app/api/plan/check-expiry/route.ts`: 쿠키 + Bearer 이중 인증, 만료 전환 + 만료 임박 알림(`D-3`, `D-1`) 생성
 
 **결제 return**
-- `app/api/payment/return/route.ts`: 세션 미사용, 서비스 롤로 `order_id` 기준 조회·승인·갱신. 나이스페이 401 시 `nicepay_auth` 반환.
+- `app/api/payment/return/route.ts`: 세션 미사용, 서비스 롤로 `order_id` 기준 조회·승인·갱신. **NICE_PAY_MERCHANT_KEY 없으면** v1 API(Basic 인증), **있으면** 레거시 pay_process.jsp 승인. 나이스페이 401 시 `nicepay_auth` 반환.
 
 ---
 
 문서화:
 
 **ARCHITECTURE.md**
-- `/api/payment/return`에 PG 리다이렉트 시 세션 없이 서비스 롤 사용 명시
+- `/api/payment/return`에 승인 방식(v1 vs 레거시·NICE_PAY_MERCHANT_KEY), Basic 인증 키 권장, PG 리다이렉트 시 세션 없이 서비스 롤 사용 명시
+- `NICE_PAY_MERCHANT_KEY` 선택 변수, `NICE_PAY_MID` 선택(미설정 시 clientId) 반영
 - `/api/payment/cancel` 역할 명시
 - `/api/payment/webhook`에 승인/취소 이벤트 처리 및 `payment_cancelled` 알림 반영 내용 추가
 - `/api/plan/check-expiry`에 만료 임박 알림(`plan_expiry_3days`, `plan_expiry_1day`) 생성 내용 추가
@@ -120,8 +126,8 @@ API 컴포넌트:
 - `/api/docs/[slug]`에 `payment-test-checklist` 추가
 
 **PLAN.md**
-- 5.1 환경 변수에 `SUPABASE_SERVICE_ROLE_KEY` 추가
-- 5.2 결제 승인 API에 세션 미사용(서비스 롤·order_id 기준) 설명 추가
+- 5.1 환경 변수에 `SUPABASE_SERVICE_ROLE_KEY` 추가, Server 승인·Basic 인증 키 권장, `NICE_PAY_MERCHANT_KEY` 선택 추가
+- 5.2 결제 승인 API에 승인 경로(v1 Basic vs 레거시)·세션 미사용(서비스 롤·order_id 기준) 설명 추가
 - 청구 내역의 `paid/cancelled` 조회 및 24시간 결제취소 정책 명시
 - 취소 API(요청 파라미터/서명/성공 처리) 상세 추가
 - 취소 이벤트 시 알림(`payment_cancelled`) 및 DB 변화 섹션 보강
@@ -137,7 +143,7 @@ API 컴포넌트:
 - 프로필 드롭다운 만료일+D-N 표기, 만료 임박 알림 UX 추가
 
 **PAYMENT-TEST-CHECKLIST.md**
-- 사전 준비에 `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` 및 Vercel 등록 안내 추가
+- 사전 준비에 Basic 인증 키·NICE_PAY_MERCHANT_KEY 선택, Server 승인/Basic 인증 타입 안내 추가
 - 실결제 시 `NICE_PAY_API_BASE=https://api.nicepay.co.kr` 반드시 등록 (미등록 시 승인 401)
 
 ---

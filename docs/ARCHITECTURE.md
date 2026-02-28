@@ -37,7 +37,7 @@ BigQuery 기반 실행 분석 시스템
 - **`/api/plan/check-expiry`**: 대시보드 진입·로그인 시 **비동기** 호출(화면 진입 블로킹 없음). `plan_expires_at`이 지난 유료 플랜 사용자를 `plan = 'free'`, `plan_expires_at = null`로 갱신. 또한 만료 임박 시점(`D-3`, `D-1`)에는 `notifications`에 `plan_expiry_3days`/`plan_expiry_1day` 알림을 생성(동일 타입·동일 일자 중복 방지). (요금제·한도·결제 상세는 [PLAN.md](./PLAN.md) 참고.)
 - **`/api/payment/config`**: GET — 결제창용 `clientId` 반환 (클라이언트에서 나이스페이 SDK 전 환경 변수 노출 없이 조회).
 - **`/api/payment/create`**: 나이스페이 주문 생성 후 결제창 호출용 `orderId`, `amount`, `goodsName` 반환.
-- **`/api/payment/return`**: 결제 완료/취소 후 콜백. GET은 취소로 간주. POST는 `authResultCode='0000'`일 때만 승인 API 호출 후 `payments`·`users.plan`·`plan_expires_at`·`notifications` 반영. PG 리다이렉트 시 세션 쿠키가 없으므로 **세션 없이** `SUPABASE_SERVICE_ROLE_KEY`로 `order_id` 기준 결제 조회·갱신. 응답은 PC/모바일 동일하게 **200 + HTML**(클라이언트 리다이렉트로 `/plan` 이동).
+- **`/api/payment/return`**: 결제 완료/취소 후 콜백. GET은 취소로 간주. POST는 `authResultCode='0000'`일 때만 승인 API 호출 후 `payments`·`users.plan`·`plan_expires_at`·`notifications` 반영. **승인 방식**: `NICE_PAY_MERCHANT_KEY`가 있으면 레거시(pay_process.jsp), 없으면 **v1 API**(`/v1/payments/{tid}`) + **Basic 인증**(clientId:secretKey). 나이스페이 개발정보에서 클라이언트 키는 **Server 승인**, 시크릿 키는 **Basic 인증** 타입 사용 권장. PG 리다이렉트 시 세션 쿠키가 없으므로 **세션 없이** `SUPABASE_SERVICE_ROLE_KEY`로 `order_id` 기준 결제 조회·갱신. 응답은 PC/모바일 동일하게 **200 + HTML**(클라이언트 리다이렉트로 `/plan` 이동).
 - **`/api/payment/cancel`**: 결제 승인 후 취소(환불) 처리. 요청 사용자 본인 결제 건(`payments.id`)만 처리하며, `status='paid'`이고 `paid_at` 기준 24시간 이내일 때만 나이스페이 취소 API 호출 후 `payments.status='cancelled'`로 갱신. 현재 플랜이 해당 결제로 반영된 상태면 `users.plan='free'`, `plan_expires_at=null`로 복구.
 - **`/api/payment/webhook`**: 나이스페이 웹훅(결제 승인/취소 이벤트). GET/HEAD/OPTIONS는 URL 등록 검증용 200 반환. POST: 서명 검증 후 승인 이벤트는 승인 API 호출·DB 갱신 및 `payment_approved` 알림 삽입, 취소 이벤트(API/관리자 취소)는 `payments.status='cancelled'`·`users.plan='free'` 반영 및 `payment_cancelled` 알림 삽입. 응답 `Content-Type: text/html`, body `OK`.
 - **`/api/notifications`**: GET — 로그인 사용자 알림 목록(`payment_approved`, `payment_cancelled`, `plan_expiry_3days`, `plan_expiry_1day` 등). PATCH `/api/notifications/[id]/read` — 읽음 처리.
@@ -60,7 +60,8 @@ Vercel
 | `NEXT_PUBLIC_NICE_PAY_CLIENT_ID` | ✅ | 나이스페이 결제창 클라이언트 키 | 결제 사용 시 |
 | `NICE_PAY_SECRET_KEY` | ✅ | 나이스페이 승인 API 시크릿 키 | 서버 전용(Vercel 환경변수에 넣으면 브라우저에 노출되지 않음) |
 | `NICE_PAY_API_BASE` | ✅ (실결제 시) | 나이스페이 승인 API 도메인 | 미설정 시 sandbox 사용. **실결제(운영) 시 `https://api.nicepay.co.kr` 반드시 등록** (미등록 시 401/U116) |
-| `NICE_PAY_MID` | ✅ | 나이스페이 취소 API용 MID | 서버 전용 |
+| `NICE_PAY_MID` | 선택 | 나이스페이 취소 API용 MID | 미설정 시 clientId 사용. 서버 전용 |
+| `NICE_PAY_MERCHANT_KEY` | 선택 | 레거시 승인(pay_process.jsp)용 상점키 | **미설정 시 v1 API(Basic 인증)만 사용**. 설정 시 return에서 레거시 승인 호출. 서버 전용 |
 | `NICE_PAY_CANCEL_API_URL` | 선택 | 나이스페이 취소 API URL | 미설정 시 `{NICE_PAY_API_BASE}/webapi/cancel_process.jsp` |
 | `NEXT_PUBLIC_NICE_PAY_SDK_URL` | 선택 | 결제창 JS 스크립트 URL | 미설정 시 테스트(sandbox) 사용 |
 | `SUPABASE_SERVICE_ROLE_KEY` | ✅ (결제 사용 시) | Supabase 서비스 롤 키 | return URL·웹훅에서 결제·알림 DB 갱신 시 필요. **서버 전용, 노출 금지** |
