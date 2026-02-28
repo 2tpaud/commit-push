@@ -45,10 +45,24 @@ interface UserProfile {
 }
 
 interface PaymentRow {
+  id: string
   paid_at: string | null
   amount: number
   plan: string
   status: string
+}
+
+function isCancelableWithin24Hours(payment: PaymentRow): boolean {
+  if (payment.status !== 'paid' || !payment.paid_at) return false
+  const paidAtMs = new Date(payment.paid_at).getTime()
+  if (Number.isNaN(paidAtMs)) return false
+  return Date.now() - paidAtMs <= 24 * 60 * 60 * 1000
+}
+
+function getPaymentStatusLabel(status: string): string {
+  if (status === 'cancelled') return '취소완료'
+  if (status === 'paid') return '승인'
+  return status
 }
 
 const PLAN_MONTHLY_PRICE: Record<PlanId, number> = {
@@ -148,6 +162,7 @@ export default function PlanPage() {
   /** 카드 클릭 시 선택 표시용 (null이면 현재 플랜 카드가 선택된 것처럼 표시) */
   const [selectedPlanId, setSelectedPlanId] = useState<PlanId | null>(null)
   const [payments, setPayments] = useState<PaymentRow[]>([])
+  const [cancellingPaymentId, setCancellingPaymentId] = useState<string | null>(null)
   /** 결제창 오픈 시각. 창만 닫고 돌아온 경우(returnUrl 미호출) 취소 메시지 표시용 */
   const paymentStartedAtRef = useRef<number | null>(null)
 
@@ -174,9 +189,9 @@ export default function PlanPage() {
     if (!user) return
     const { data, error } = await supabase
       .from('payments')
-      .select('paid_at, amount, plan, status')
+      .select('id, paid_at, amount, plan, status')
       .eq('user_id', user.id)
-      .eq('status', 'paid')
+      .in('status', ['paid', 'cancelled'])
       .order('created_at', { ascending: false })
     if (!error && data) {
       setPayments(data as PaymentRow[])
@@ -365,6 +380,51 @@ export default function PlanPage() {
     [effectiveClientId, billingCycle]
   )
 
+  const cancelPayment = useCallback(
+    async (payment: PaymentRow) => {
+      if (!isCancelableWithin24Hours(payment) || cancellingPaymentId) return
+
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) {
+        setMessage({ type: 'error', text: '로그인 세션이 없습니다. 다시 로그인해 주세요.' })
+        return
+      }
+
+      setCancellingPaymentId(payment.id)
+      try {
+        const res = await fetch('/api/payment/cancel', {
+          method: 'POST',
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({ paymentId: payment.id }),
+        })
+        const data = (await res.json().catch(() => ({}))) as { error?: string; resultMsg?: string }
+        if (!res.ok) {
+          const messages: Record<string, string> = {
+            cancel_window_expired: '결제 승인 후 24시간이 지나 취소할 수 없습니다.',
+            already_processed: '이미 처리된 결제 건입니다.',
+            payment_not_found: '결제 내역을 찾을 수 없습니다.',
+            missing_tid: '결제 취소에 필요한 거래 정보가 없습니다.',
+            config_error: '결제 취소 설정을 확인해 주세요.',
+            cancel_failed: data.resultMsg ?? 'PG 취소 처리에 실패했습니다.',
+          }
+          setMessage({ type: 'error', text: messages[data.error ?? ''] ?? '결제 취소 중 오류가 발생했습니다.' })
+          return
+        }
+
+        setMessage({ type: 'success', text: '결제가 취소되었습니다.' })
+        await refetchProfile()
+        await refetchPayments()
+      } finally {
+        setCancellingPaymentId(null)
+      }
+    },
+    [cancellingPaymentId, refetchPayments, refetchProfile]
+  )
+
 
   useEffect(() => {
     let mounted = true
@@ -397,9 +457,9 @@ export default function PlanPage() {
         if (mounted && u) {
           const { data: payData } = await supabase
             .from('payments')
-            .select('paid_at, amount, plan, status')
+            .select('id, paid_at, amount, plan, status')
             .eq('user_id', u.id)
-            .eq('status', 'paid')
+            .in('status', ['paid', 'cancelled'])
             .order('created_at', { ascending: false })
           if (mounted && payData) setPayments(payData as PaymentRow[])
         }
@@ -521,11 +581,12 @@ export default function PlanPage() {
                       <TableHead className="text-[#1F2A44]">금액</TableHead>
                       <TableHead className="text-[#1F2A44]">플랜</TableHead>
                       <TableHead className="text-[#1F2A44]">상태</TableHead>
+                      <TableHead className="text-right text-[#1F2A44]">동작</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {payments.map((row, i) => (
-                      <TableRow key={i}>
+                    {payments.map((row) => (
+                      <TableRow key={row.id}>
                         <TableCell>
                           {row.paid_at
                             ? new Date(row.paid_at).toLocaleString('ko-KR', {
@@ -543,7 +604,19 @@ export default function PlanPage() {
                         <TableCell>
                           {PLAN_META[row.plan as PlanId]?.name ?? row.plan}
                         </TableCell>
-                        <TableCell>승인</TableCell>
+                        <TableCell>{getPaymentStatusLabel(row.status)}</TableCell>
+                        <TableCell className="text-right">
+                          {isCancelableWithin24Hours(row) && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={cancellingPaymentId === row.id}
+                              onClick={() => cancelPayment(row)}
+                            >
+                              {cancellingPaymentId === row.id ? '취소 처리 중…' : '결제취소'}
+                            </Button>
+                          )}
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>

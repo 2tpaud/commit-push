@@ -56,6 +56,7 @@ export async function POST(request: Request) {
   }
 
   const resultCode = String(body.resultCode ?? '')
+  const resultMsg = String(body.resultMsg ?? '')
   const status = String(body.status ?? '')
   const orderId = String(body.orderId ?? '')
   const tid = String(body.tid ?? '')
@@ -63,9 +64,14 @@ export async function POST(request: Request) {
   const ediDate = String(body.ediDate ?? '')
   const signature = String(body.signature ?? '')
 
-  if (resultCode !== '0000' || status !== 'paid' || !orderId || !tid || amount <= 0) {
-    return okResponse()
-  }
+  const isPaidEvent = resultCode === '0000' && status === 'paid'
+  const isCancelEvent =
+    status.toLowerCase().includes('cancel') ||
+    resultMsg.toLowerCase().includes('cancel') ||
+    resultMsg.includes('취소') ||
+    resultCode === '2001'
+
+  if (!isPaidEvent && !isCancelEvent) return okResponse()
 
   if (!secretKey || !clientId) {
     return okResponse()
@@ -86,20 +92,28 @@ export async function POST(request: Request) {
     { auth: { persistSession: false } }
   )
 
-  const { data: payment, error: fetchError } = await supabase
+  let paymentQuery = supabase
     .from('payments')
     .select('id, user_id, plan, amount, status, billing_cycle')
-    .eq('order_id', orderId)
-    .single()
+
+  if (orderId) {
+    paymentQuery = paymentQuery.eq('order_id', orderId)
+  } else if (tid) {
+    paymentQuery = paymentQuery.eq('tid', tid)
+  } else {
+    return okResponse()
+  }
+
+  const { data: payment, error: fetchError } = await paymentQuery.single()
 
   if (fetchError || !payment) {
     return okResponse()
   }
-  if (payment.amount !== amount) {
+  if (isPaidEvent && payment.amount !== amount) {
     return okResponse()
   }
 
-  if (payment.status !== 'paid') {
+  if (isPaidEvent && payment.status !== 'paid') {
     const approvalUrl = `${NICEPAY_API_BASE.replace(/\/$/, '')}/v1/payments/${tid}`
     const credentials = Buffer.from(`${clientId}:${secretKey}`, 'utf8').toString('base64')
     const res = await fetch(approvalUrl, {
@@ -154,18 +168,56 @@ export async function POST(request: Request) {
       .eq('id', payment.id)
   }
 
-  const planLabel = payment.plan === 'team' ? 'Team' : 'Pro'
-  const cycleLabel = payment.amount === 48000 || payment.amount === 67200 ? '1년' : '1개월'
-  try {
-    await supabase.from('notifications').insert({
-      user_id: payment.user_id,
-      type: 'payment_approved',
-      payment_id: payment.id,
-      title: '결제가 완료되었습니다',
-      body: `${planLabel} ${cycleLabel} 구독이 적용되었습니다.`,
-    })
-  } catch {
-    // 알림 실패해도 웹훅 응답은 OK 유지
+  if (isPaidEvent) {
+    const planLabel = payment.plan === 'team' ? 'Team' : 'Pro'
+    const cycleLabel = payment.amount === 48000 || payment.amount === 67200 ? '1년' : '1개월'
+    try {
+      await supabase.from('notifications').insert({
+        user_id: payment.user_id,
+        type: 'payment_approved',
+        payment_id: payment.id,
+        title: '결제가 완료되었습니다',
+        body: `${planLabel} ${cycleLabel} 구독이 적용되었습니다.`,
+      })
+    } catch {
+      // 알림 실패해도 웹훅 응답은 OK 유지
+    }
+    return okResponse()
+  }
+
+  if (isCancelEvent) {
+    let changedToCancelled = false
+    if (payment.status !== 'cancelled') {
+      await supabase
+        .from('payments')
+        .update({ status: 'cancelled' })
+        .eq('id', payment.id)
+      changedToCancelled = true
+
+      await supabase
+        .from('users')
+        .update({
+          plan: 'free',
+          plan_expires_at: null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', payment.user_id)
+    }
+
+    if (changedToCancelled) {
+      const planLabel = payment.plan === 'team' ? 'Team' : 'Pro'
+      try {
+        await supabase.from('notifications').insert({
+          user_id: payment.user_id,
+          type: 'payment_cancelled',
+          payment_id: null,
+          title: '결제가 취소되었습니다',
+          body: `${planLabel} 결제가 취소되어 Free 플랜으로 전환되었습니다.`,
+        })
+      } catch {
+        // 알림 실패해도 웹훅 응답은 OK 유지
+      }
+    }
   }
 
   return okResponse()

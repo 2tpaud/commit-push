@@ -37,13 +37,14 @@ BigQuery 기반 실행 분석 시스템
 - **`/api/plan/check-expiry`**: 대시보드 진입·로그인 시 **비동기** 호출(화면 진입 블로킹 없음). `plan_expires_at`이 지난 유료 플랜 사용자를 `plan = 'free'`, `plan_expires_at = null`로 갱신. (요금제·한도·결제 상세는 [PLAN.md](./PLAN.md) 참고.)
 - **`/api/payment/config`**: GET — 결제창용 `clientId` 반환 (클라이언트에서 나이스페이 SDK 전 환경 변수 노출 없이 조회).
 - **`/api/payment/create`**: 나이스페이 주문 생성 후 결제창 호출용 `orderId`, `amount`, `goodsName` 반환.
-- **`/api/payment/return`**: 결제 완료/취소 후 콜백. GET은 취소로 간주. POST는 `authResultCode='0000'`일 때만 승인 API 호출 후 `payments`·`users.plan`·`plan_expires_at`·`notifications` 반영. 응답은 PC/모바일 동일하게 **200 + HTML**(클라이언트 리다이렉트로 `/plan` 이동). 결제 승인 후 취소/환불 API는 미구현.
-- **`/api/payment/webhook`**: 나이스페이 웹훅(결제 승인 시). GET/HEAD/OPTIONS는 URL 등록 검증용 200 반환. POST: 서명 검증 후 미처리 건만 승인 API 호출·DB 갱신, `notifications` 삽입. 응답 `Content-Type: text/html`, body `OK`.
+- **`/api/payment/return`**: 결제 완료/취소 후 콜백. GET은 취소로 간주. POST는 `authResultCode='0000'`일 때만 승인 API 호출 후 `payments`·`users.plan`·`plan_expires_at`·`notifications` 반영. 응답은 PC/모바일 동일하게 **200 + HTML**(클라이언트 리다이렉트로 `/plan` 이동).
+- **`/api/payment/cancel`**: 결제 승인 후 취소(환불) 처리. 요청 사용자 본인 결제 건(`payments.id`)만 처리하며, `status='paid'`이고 `paid_at` 기준 24시간 이내일 때만 나이스페이 취소 API 호출 후 `payments.status='cancelled'`로 갱신. 현재 플랜이 해당 결제로 반영된 상태면 `users.plan='free'`, `plan_expires_at=null`로 복구.
+- **`/api/payment/webhook`**: 나이스페이 웹훅(결제 승인/취소 이벤트). GET/HEAD/OPTIONS는 URL 등록 검증용 200 반환. POST: 서명 검증 후 승인 이벤트는 승인 API 호출·DB 갱신 및 `payment_approved` 알림 삽입, 취소 이벤트(API/관리자 취소)는 `payments.status='cancelled'`·`users.plan='free'` 반영 및 `payment_cancelled` 알림 삽입. 응답 `Content-Type: text/html`, body `OK`.
 - **`/api/notifications`**: GET — 로그인 사용자 알림 목록. PATCH `/api/notifications/[id]/read` — 읽음 처리.
 - **`/api/activity`**: GET — 연도별 활동 집계(`year` 쿼리). 홈 활동 그래프(ContributionGraph)에서 노트·커밋의 **생성·수정** 일별 횟수 조회(노트/커밋 모두 `created_at`, `updated_at` 반영). 클라이언트: 레이아웃에서 세션 확보 시 현재 연도 **프리페치**, `src/lib/activityCache.ts`로 연도별 캐시·진행 중 요청 공유 → 재진입 시 로딩 최소화.
 - **`/api/docs/[slug]`**: GET — 문서 원문 조회. `slug`는 `architecture` | `database` | `design` | `plan` | `product` 중 하나. 개발자 노트 등에서 docs 마크다운 로드 시 사용.
 
-**결제(Plan) 요약**: 주문 생성 → 결제창(나이스페이 JS SDK) → returnUrl POST 시 승인 API 호출 → `users`·`payments`·`notifications` 갱신. 만료일 지나면 check-expiry로 `plan = 'free'` 전환. 구독 취소 버튼·다이얼로그는 UI만 있으며, PG 취소/환불 API 연동은 미구현. 흐름·DB 변화·한도·환경 변수 상세는 [PLAN.md](./PLAN.md) 참고.
+**결제(Plan) 요약**: 주문 생성 → 결제창(나이스페이 JS SDK) → returnUrl POST 시 승인 API 호출 → `users`·`payments`·`notifications` 갱신. 이후 Plan 청구 내역에서 승인 24시간 이내 건은 `/api/payment/cancel`로 취소 가능하며, 성공 시 `payments.status='cancelled'` 반영 + `payment_cancelled` 알림이 생성됩니다. 또한 나이스페이 웹훅의 취소 이벤트(API/관리자 취소)에서도 동일한 취소 반영/알림이 수행됩니다. 만료일 지나면 check-expiry로 `plan = 'free'` 전환. 흐름·DB 변화·한도·환경 변수 상세는 [PLAN.md](./PLAN.md) 참고.
 
 ### Deployment
 
@@ -59,6 +60,8 @@ Vercel
 | `NEXT_PUBLIC_NICE_PAY_CLIENT_ID` | ✅ | 나이스페이 결제창 클라이언트 키 | 결제 사용 시 |
 | `NICE_PAY_SECRET_KEY` | ✅ | 나이스페이 승인 API 시크릿 키 | 서버 전용(Vercel 환경변수에 넣으면 브라우저에 노출되지 않음) |
 | `NICE_PAY_API_BASE` | 선택 | 나이스페이 승인 API 도메인 | 미설정 시 테스트(sandbox) 사용 |
+| `NICE_PAY_MID` | ✅ | 나이스페이 취소 API용 MID | 서버 전용 |
+| `NICE_PAY_CANCEL_API_URL` | 선택 | 나이스페이 취소 API URL | 미설정 시 `{NICE_PAY_API_BASE}/webapi/cancel_process.jsp` |
 | `NEXT_PUBLIC_NICE_PAY_SDK_URL` | 선택 | 결제창 JS 스크립트 URL | 미설정 시 테스트(sandbox) 사용 |
 | `SUPABASE_SERVICE_ROLE_KEY` | 선택 | Supabase 서비스 롤 키 | 웹훅에서 결제·알림 DB 갱신 시 필요. **서버 전용, 노출 금지** |
 | `NEXT_PUBLIC_GOOGLE_CLIENT_ID` | 선택 | Google OAuth 웹 클라이언트 ID(앱 1개당 1개) | 커밋푸시 "구글 드라이브에서 선택" 시 Drive API(앱 내 피커)용. 사용자별 값이 아님. 각 사용자는 자기 Google 계정으로 로그인해 자기 Drive에서만 선택·링크 저장(파일 업로드 없음). **배포 환경 사용 시** 아래 "Google Drive 연동(배포)" 참고. |
