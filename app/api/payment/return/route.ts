@@ -80,8 +80,13 @@ export async function POST(request: Request) {
   const orderId = form.orderId ?? form.Moid
   const amountStr = form.amount ?? form.Amt
   const authToken = form.authToken ?? form.AuthToken
-  const nextAppUrl = form.nextAppURL ?? form.NextAppURL ?? form.nextAppUrl
-  const mid = form.mid ?? form.MID ?? process.env.NICE_PAY_MID
+  const nextAppUrl =
+    form.nextAppURL ?? form.NextAppURL ?? form.nextAppUrl ??
+    (process.env.NICE_PAY_APPROVAL_URL ||
+      (NICEPAY_API_BASE.includes('api.nicepay.co.kr')
+        ? 'https://dc1-api.nicepay.co.kr/webapi/pay_process.jsp'
+        : undefined))
+  const mid = form.mid ?? form.MID ?? process.env.NICE_PAY_MID ?? form.clientId
 
   // 나이스페이: authResultCode '0000'만 인증 성공. 그 외(사용자 취소·창 닫기 등)는 취소로 통일해 PC 동작과 맞춤
   if (authResultCode !== '0000') {
