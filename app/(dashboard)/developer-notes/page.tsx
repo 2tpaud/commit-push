@@ -62,6 +62,7 @@ const DOC_TABS = [
   { value: 'database', label: '데이터베이스' },
   { value: 'design', label: '디자인' },
   { value: 'plan', label: '플랜' },
+  { value: 'payment-test-checklist', label: '결제 테스트' },
 ] as const
 
 const markdownProseClass =

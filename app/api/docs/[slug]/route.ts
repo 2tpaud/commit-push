@@ -8,6 +8,7 @@ const ALLOWED_SLUGS: Record<string, string> = {
   design: 'DESIGN.md',
   plan: 'PLAN.md',
   product: 'PRODUCT.md',
+  'payment-test-checklist': 'PAYMENT-TEST-CHECKLIST.md',
 }
 
 export async function GET(
