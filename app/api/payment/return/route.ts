@@ -96,7 +96,7 @@ export async function POST(request: Request) {
 
   const supabase = getSupabaseForReturn()
   if (!supabase) {
-    return fail('config_error')
+    return fail('config_error_supabase')
   }
 
   const { data: payment, error: fetchError } = await supabase
@@ -116,7 +116,7 @@ export async function POST(request: Request) {
   }
 
   if (!clientId || !secretKey) {
-    return fail('config_error')
+    return fail('config_error_nicepay')
   }
 
   const approvalUrl = `${NICEPAY_API_BASE.replace(/\/$/, '')}/v1/payments/${tid}`
