@@ -1,9 +1,12 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import crypto from 'crypto'
 
 const NICEPAY_API_BASE = process.env.NICE_PAY_API_BASE ?? 'https://sandbox-api.nicepay.co.kr'
 const clientId = process.env.NEXT_PUBLIC_NICE_PAY_CLIENT_ID
 const secretKey = process.env.NICE_PAY_SECRET_KEY
+/** 레거시 승인(pay_process.jsp)용 상점키. 없으면 NICE_PAY_SECRET_KEY 사용 */
+const merchantKey = process.env.NICE_PAY_MERCHANT_KEY ?? secretKey
 
 /** 나이스페이 returnUrl POST는 PG 리다이렉트로 오므로 세션 쿠키가 없을 수 있음. order_id로 결제 조회 후 승인 처리. */
 function getSupabaseForReturn() {
@@ -71,11 +74,14 @@ export async function POST(request: Request) {
     form = await request.json().catch(() => ({})) as Record<string, string>
   }
 
-  const authResultCode = String(form.authResultCode ?? '').trim()
-  const authResultMsg = String(form.authResultMsg ?? '').trim()
-  const tid = form.tid
-  const orderId = form.orderId
-  const amountStr = form.amount
+  const authResultCode = String(form.authResultCode ?? form.AuthResultCode ?? '').trim()
+  const authResultMsg = String(form.authResultMsg ?? form.AuthResultMsg ?? '').trim()
+  const tid = form.tid ?? form.TxTid ?? form.TID
+  const orderId = form.orderId ?? form.Moid
+  const amountStr = form.amount ?? form.Amt
+  const authToken = form.authToken ?? form.AuthToken
+  const nextAppUrl = form.nextAppURL ?? form.NextAppURL
+  const mid = form.mid ?? form.MID
 
   // 나이스페이: authResultCode '0000'만 인증 성공. 그 외(사용자 취소·창 닫기 등)는 취소로 통일해 PC 동작과 맞춤
   if (authResultCode !== '0000') {
@@ -115,56 +121,115 @@ export async function POST(request: Request) {
     return success()
   }
 
-  if (!clientId || !secretKey) {
-    return fail('config_error')
-  }
+  const amtStr = String(payment.amount)
 
-  const approvalUrl = `${NICEPAY_API_BASE.replace(/\/$/, '')}/v1/payments/${tid}`
-  const res = await fetch(approvalUrl, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Basic ${getBasicAuth()}`,
-    },
-    body: JSON.stringify({ amount: payment.amount }),
-  })
-
-  const raw = await res.json().catch(() => ({})) as Record<string, unknown>
-  const result = (raw?.result != null ? raw.result : raw) as {
-    resultCode?: string | number
-    status?: string
-    paidAt?: string | number | null
-    amount?: number | string
-  }
-  const resultCodeOk = String(result?.resultCode ?? '') === '0000'
-  const statusOk = String(result?.status ?? '').toLowerCase() === 'paid'
-  const paidAtOk =
-    result?.paidAt != null &&
-    String(result.paidAt).trim() !== '' &&
-    String(result.paidAt) !== '0'
-  const amountOk = Number(result?.amount) === Number(payment.amount)
-  const approved = resultCodeOk && amountOk && (statusOk || paidAtOk)
-  if (!approved) {
-    console.error('[payment/return] approval_failed', {
-      orderId,
-      tid,
-      resStatus: res.status,
-      resOk: res.ok,
-      raw: raw,
-      resultCode: result?.resultCode,
-      status: result?.status,
-      paidAt: result?.paidAt,
-      amount: result?.amount,
-      paymentAmount: payment.amount,
+  // 실결제(운영): U103 "사용자 인증타입이 맞지 않습니다" 방지 — 인증 응답의 NextAppURL + AuthToken으로 레거시 승인 사용
+  if (nextAppUrl && authToken && mid && merchantKey) {
+    const ediDate = new Date()
+      .toISOString()
+      .replace(/[-:T]/g, '')
+      .slice(0, 14)
+    const signPayload = `${authToken}${mid}${amtStr}${ediDate}${merchantKey}`
+    const signData = crypto.createHash('sha256').update(signPayload, 'utf8').digest('hex')
+    const body = new URLSearchParams({
+      TID: tid,
+      AuthToken: authToken,
+      MID: mid,
+      Amt: amtStr,
+      EdiDate: ediDate,
+      SignData: signData,
+      CharSet: 'utf-8',
+      EdiType: 'JSON',
     })
-    await supabase
-      .from('payments')
-      .update({ status: 'failed' })
-      .eq('id', payment.id)
-    if (res.status === 401) {
-      return fail('nicepay_auth')
+    const resLegacy = await fetch(nextAppUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=utf-8' },
+      body: body.toString(),
+    })
+    const textLegacy = await resLegacy.text()
+    let rawLegacy: Record<string, unknown> = {}
+    try {
+      rawLegacy = JSON.parse(textLegacy) as Record<string, unknown>
+    } catch {
+      rawLegacy = { resultCode: 'parse_error', resultMsg: textLegacy?.slice(0, 200) }
     }
-    return fail('approval_failed')
+    const resultCode = String(rawLegacy?.ResultCode ?? rawLegacy?.resultCode ?? '')
+    const legacySuccess = ['3001', '4000', '4100', 'A000', '7001'].includes(resultCode)
+    const amountOkLegacy = Number(rawLegacy?.Amt ?? rawLegacy?.amt) === Number(payment.amount)
+    if (legacySuccess && amountOkLegacy) {
+      // 레거시 승인 성공 — 아래 DB 갱신으로 진행
+    } else {
+      console.error('[payment/return] legacy_approval_failed', {
+        orderId,
+        tid,
+        resultCode,
+        resultMsg: rawLegacy?.ResultMsg ?? rawLegacy?.resultMsg,
+        resStatus: resLegacy.status,
+      })
+      await supabase.from('payments').update({ status: 'failed' }).eq('id', payment.id)
+      return fail('approval_failed')
+    }
+  } else {
+    if (!clientId || !secretKey) {
+      return fail('config_error')
+    }
+    const approvalUrl = `${NICEPAY_API_BASE.replace(/\/$/, '')}/v1/payments/${tid}`
+    const res = await fetch(approvalUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Basic ${getBasicAuth()}`,
+      },
+      body: JSON.stringify({ amount: payment.amount }),
+    })
+
+    const raw = await res.json().catch(() => ({})) as Record<string, unknown>
+    const result = (raw?.result != null ? raw.result : raw) as {
+      resultCode?: string | number
+      status?: string
+      paidAt?: string | number | null
+      amount?: number | string
+    }
+    const resultCodeOk = String(result?.resultCode ?? '') === '0000'
+    const statusOk = String(result?.status ?? '').toLowerCase() === 'paid'
+    const paidAtOk =
+      result?.paidAt != null &&
+      String(result.paidAt).trim() !== '' &&
+      String(result.paidAt) !== '0'
+    const amountOk = Number(result?.amount) === Number(payment.amount)
+    const approved = resultCodeOk && amountOk && (statusOk || paidAtOk)
+    if (!approved) {
+      if (res.status === 401) {
+        console.error('[payment/return] nicepay_401', {
+          orderId,
+          tid,
+          apiBase: NICEPAY_API_BASE.replace(/\/$/, ''),
+          responseBody: raw,
+          code: (raw as { code?: string })?.code,
+          message: (raw as { message?: string })?.message,
+        })
+      }
+      console.error('[payment/return] approval_failed', {
+        orderId,
+        tid,
+        resStatus: res.status,
+        resOk: res.ok,
+        raw: raw,
+        resultCode: result?.resultCode,
+        status: result?.status,
+        paidAt: result?.paidAt,
+        amount: result?.amount,
+        paymentAmount: payment.amount,
+      })
+      await supabase
+        .from('payments')
+        .update({ status: 'failed' })
+        .eq('id', payment.id)
+      if (res.status === 401) {
+        return fail('nicepay_auth')
+      }
+      return fail('approval_failed')
+    }
   }
 
   const expiresAt = new Date()
