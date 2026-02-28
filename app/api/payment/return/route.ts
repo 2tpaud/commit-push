@@ -130,19 +130,30 @@ export async function POST(request: Request) {
   })
 
   const result = await res.json().catch(() => ({})) as {
-    resultCode?: string
+    resultCode?: string | number
     status?: string
-    paidAt?: string | null
-    amount?: number
+    paidAt?: string | number | null
+    amount?: number | string
   }
-  const approved =
-    result.resultCode === '0000' &&
-    result.status === 'paid' &&
-    typeof result.paidAt === 'string' &&
-    result.paidAt.trim() !== '' &&
-    result.paidAt !== '0' &&
-    Number(result.amount) === payment.amount
+  const resultCodeOk = String(result.resultCode ?? '') === '0000'
+  const statusOk = String(result.status ?? '').toLowerCase() === 'paid'
+  const paidAtOk =
+    result.paidAt != null &&
+    String(result.paidAt).trim() !== '' &&
+    String(result.paidAt) !== '0'
+  const amountOk = Number(result.amount) === Number(payment.amount)
+  const approved = resultCodeOk && statusOk && paidAtOk && amountOk
   if (!approved) {
+    console.error('[payment/return] approval_failed', {
+      orderId,
+      tid,
+      resStatus: res.status,
+      resultCode: result.resultCode,
+      status: result.status,
+      paidAt: result.paidAt,
+      amount: result.amount,
+      paymentAmount: payment.amount,
+    })
     await supabase
       .from('payments')
       .update({ status: 'failed' })
