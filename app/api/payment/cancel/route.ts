@@ -99,7 +99,11 @@ export async function POST(request: Request) {
   const ediDate = getEdiDate()
   const cancelAmt = String(payment.amount)
   const signData = crypto.createHash('sha256').update(`${mid}${cancelAmt}${ediDate}${secretKey}`, 'utf8').digest('hex')
-  const cancelUrl = NICEPAY_CANCEL_API_URL ?? `${NICEPAY_API_BASE.replace(/\/$/, '')}/webapi/cancel_process.jsp`
+  const cancelUrl =
+    NICEPAY_CANCEL_API_URL ??
+    (NICEPAY_API_BASE.includes('api.nicepay.co.kr')
+      ? 'https://dc1-api.nicepay.co.kr/webapi/cancel_process.jsp'
+      : `${NICEPAY_API_BASE.replace(/\/$/, '')}/webapi/cancel_process.jsp`)
 
   const form = new URLSearchParams({
     TID: payment.tid,
