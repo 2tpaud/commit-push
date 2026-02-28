@@ -13,6 +13,17 @@ function getBasicAuth(): string {
   return Buffer.from(credentials, 'utf8').toString('base64')
 }
 
+/**
+ * GET: 결제창을 닫거나 취소한 뒤 모바일/일부 환경에서 returnUrl로 GET 리다이렉트만 오는 경우 처리.
+ * 나이스페이 정식 스펙은 returnUrl에 POST만 전송하지만, 창 닫기 시 GET만 오면 405가 나가 PG 로그 해석이 달라질 수 있으므로
+ * GET은 무조건 취소로 간주하고 /plan으로 돌려보냄. (참고: https://start.nicepay.co.kr/manual/admin/developers/log/info.do)
+ */
+export async function GET(request: Request) {
+  const planPageUrl = new URL('/plan', request.url)
+  planPageUrl.searchParams.set('error', 'cancelled')
+  return NextResponse.redirect(planPageUrl.toString())
+}
+
 export async function POST(request: Request) {
   const planPageUrl = new URL('/plan', request.url)
   const fail = (reason: string) => {
@@ -33,12 +44,18 @@ export async function POST(request: Request) {
     form = await request.json().catch(() => ({})) as Record<string, string>
   }
 
-  const authResultCode = form.authResultCode
+  const authResultCode = String(form.authResultCode ?? '').trim()
+  const authResultMsg = String(form.authResultMsg ?? '').trim()
   const tid = form.tid
   const orderId = form.orderId
   const amountStr = form.amount
 
+  // 나이스페이: authResultCode '0000'만 인증 성공, 그 외(취소·실패)는 인증 실패
   if (authResultCode !== '0000') {
+    return fail('auth_failed')
+  }
+  // 인증 성공이어도 메시지에 취소/실패 문구가 있으면 인증 실패로 간주 (모바일 등 일부 환경 대비)
+  if (/취소|cancel|실패|fail|오류|error/i.test(authResultMsg)) {
     return fail('auth_failed')
   }
   if (!tid || !orderId || amountStr === undefined) {

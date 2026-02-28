@@ -193,6 +193,7 @@ export default function PlanPage() {
       refetchPayments()
     } else if (error) {
       const messages: Record<string, string> = {
+        cancelled: '결제를 취소하셨습니다.',
         auth_failed: '인증에 실패했습니다.',
         invalid_callback: '결제 정보가 올바르지 않습니다.',
         invalid_amount: '결제 금액이 올바르지 않습니다.',
