@@ -161,6 +161,9 @@ export async function POST(request: Request) {
       .from('payments')
       .update({ status: 'failed' })
       .eq('id', payment.id)
+    if (res.status === 401) {
+      return fail('nicepay_auth')
+    }
     return fail('approval_failed')
   }
 

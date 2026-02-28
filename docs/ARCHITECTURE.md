@@ -59,7 +59,7 @@ Vercel
 | `NEXT_PUBLIC_SHARE_DOMAIN` | 선택 | 노트 공유 링크 도메인 | 미설정 시 `window.location.origin` 사용. Vercel 도메인 연결 시 별도 설정 불필요. |
 | `NEXT_PUBLIC_NICE_PAY_CLIENT_ID` | ✅ | 나이스페이 결제창 클라이언트 키 | 결제 사용 시 |
 | `NICE_PAY_SECRET_KEY` | ✅ | 나이스페이 승인 API 시크릿 키 | 서버 전용(Vercel 환경변수에 넣으면 브라우저에 노출되지 않음) |
-| `NICE_PAY_API_BASE` | 선택 | 나이스페이 승인 API 도메인 | 미설정 시 테스트(sandbox) 사용 |
+| `NICE_PAY_API_BASE` | ✅ (실결제 시) | 나이스페이 승인 API 도메인 | 미설정 시 sandbox 사용. **실결제(운영) 시 `https://api.nicepay.co.kr` 반드시 등록** (미등록 시 401/U116) |
 | `NICE_PAY_MID` | ✅ | 나이스페이 취소 API용 MID | 서버 전용 |
 | `NICE_PAY_CANCEL_API_URL` | 선택 | 나이스페이 취소 API URL | 미설정 시 `{NICE_PAY_API_BASE}/webapi/cancel_process.jsp` |
 | `NEXT_PUBLIC_NICE_PAY_SDK_URL` | 선택 | 결제창 JS 스크립트 URL | 미설정 시 테스트(sandbox) 사용 |

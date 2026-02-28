@@ -46,7 +46,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       requestAnimationFrame(() => clearEmptyHash())
       setTimeout(clearEmptyHash, 150)
       if (u?.id) {
-        fetch('/api/plan/check-expiry').catch(() => { /* ignore */ })
+        fetch('/api/plan/check-expiry', {
+          headers: s?.access_token ? { Authorization: `Bearer ${s.access_token}` } : undefined,
+        }).catch(() => { /* ignore */ })
       }
     }
     // 구독 먼저 등록 → 캐시된 세션이 있으면 onAuthStateChange가 먼저 콜백 호출 → 화면 진입 빠름

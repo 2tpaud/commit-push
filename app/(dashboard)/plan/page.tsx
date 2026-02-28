@@ -219,6 +219,7 @@ export default function PlanPage() {
         order_not_found: '주문을 찾을 수 없습니다.',
         amount_mismatch: '결제 금액이 일치하지 않습니다.',
         approval_failed: '승인 처리에 실패했습니다.',
+        nicepay_auth: '나이스페이 인증에 실패했습니다(401). Vercel 환경 변수에서 NICE_PAY_API_BASE와 클라이언트/시크릿 키가 같은 환경(테스트 또는 운영)인지 확인하세요.',
         config_error: '결제 설정을 확인해 주세요.',
         update_failed: '플랜 반영에 실패했습니다.',
         unauthorized: '로그인이 필요합니다.',

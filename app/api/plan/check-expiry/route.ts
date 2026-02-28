@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import type { SupabaseClient } from '@supabase/supabase-js'
+import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { createServerSupabase } from '@/lib/supabaseServer'
 
 function getDaysLeft(expiresAt: Date): number {
@@ -47,12 +47,30 @@ async function notifyPlanExpiry(
 
 /**
  * GET: plan_expires_at이 지났으면 해당 사용자를 free 플랜으로 전환합니다.
- * 세션은 쿠키에서 조회 (다른 대시보드 API와 동일).
+ * 인증: 1) 쿠키 세션 2) 없으면 Authorization: Bearer (배포 환경에서 쿠키 미전달 시 대비).
  */
-export async function GET() {
-  const supabase = await createServerSupabase()
-  const { data: { session } } = await supabase.auth.getSession()
-  const user = session?.user
+export async function GET(request: Request) {
+  let supabase = await createServerSupabase()
+  let session = (await supabase.auth.getSession()).data.session
+  let user = session?.user
+
+  if (!user) {
+    const authHeader = request.headers.get('Authorization')
+    const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null
+    if (token && process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+      const client = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+        { global: { headers: { Authorization: `Bearer ${token}` } } }
+      )
+      const { data: { user: u } } = await client.auth.getUser()
+      if (u) {
+        user = u
+        supabase = client
+      }
+    }
+  }
+
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }

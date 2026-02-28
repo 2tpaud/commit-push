@@ -13,7 +13,9 @@
   - `NEXT_PUBLIC_NICE_PAY_SDK_URL` (테스트: `https://sandbox-pay.nicepay.co.kr/v1/js/`)
 - [ ] 나이스페이 개발정보에서 테스트용 키 발급·등록
 - [ ] 로그인 상태에서 `/plan` 접근 가능한지 확인
-- [ ] Vercel 배포 시 위 환경 변수(특히 `SUPABASE_SERVICE_ROLE_KEY`) 동일하게 등록
+- [ ] Vercel 배포 시 위 환경 변수 동일하게 등록
+  - `SUPABASE_SERVICE_ROLE_KEY` (결제 return·웹훅 필수)
+  - **실결제 시** `NICE_PAY_API_BASE=https://api.nicepay.co.kr` 반드시 등록 (미등록 시 승인 401)
 
 ---
 
