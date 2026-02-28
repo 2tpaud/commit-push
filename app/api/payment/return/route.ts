@@ -1,9 +1,17 @@
 import { NextResponse } from 'next/server'
-import { createServerSupabase } from '@/lib/supabaseServer'
+import { createClient } from '@supabase/supabase-js'
 
 const NICEPAY_API_BASE = process.env.NICE_PAY_API_BASE ?? 'https://sandbox-api.nicepay.co.kr'
 const clientId = process.env.NEXT_PUBLIC_NICE_PAY_CLIENT_ID
 const secretKey = process.env.NICE_PAY_SECRET_KEY
+
+/** 나이스페이 returnUrl POST는 PG 리다이렉트로 오므로 세션 쿠키가 없을 수 있음. order_id로 결제 조회 후 승인 처리. */
+function getSupabaseForReturn() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!url || !serviceRoleKey) return null
+  return createClient(url, serviceRoleKey, { auth: { persistSession: false } })
+}
 
 function getBasicAuth(): string {
   if (!clientId || !secretKey) {
@@ -86,11 +94,9 @@ export async function POST(request: Request) {
     return fail('invalid_amount')
   }
 
-  const supabase = await createServerSupabase()
-  const { data: { session } } = await supabase.auth.getSession()
-  const user = session?.user
-  if (!user) {
-    return fail('unauthorized')
+  const supabase = getSupabaseForReturn()
+  if (!supabase) {
+    return fail('config_error')
   }
 
   const { data: payment, error: fetchError } = await supabase
@@ -101,9 +107,6 @@ export async function POST(request: Request) {
 
   if (fetchError || !payment) {
     return fail('order_not_found')
-  }
-  if (payment.user_id !== user.id) {
-    return fail('forbidden')
   }
   if (payment.amount !== amount) {
     return fail('amount_mismatch')
@@ -161,7 +164,7 @@ export async function POST(request: Request) {
       plan_expires_at: expiresAt.toISOString(),
       updated_at: new Date().toISOString(),
     })
-    .eq('id', user.id)
+    .eq('id', payment.user_id)
 
   if (updateUserError) {
     console.error('Update user plan error:', updateUserError)
@@ -181,7 +184,7 @@ export async function POST(request: Request) {
   const cycleLabel = isAnnual ? '1년' : '1개월'
   try {
     await supabase.from('notifications').insert({
-      user_id: user.id,
+      user_id: payment.user_id,
       type: 'payment_approved',
       payment_id: payment.id,
       title: '결제가 완료되었습니다',
