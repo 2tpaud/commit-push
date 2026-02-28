@@ -80,8 +80,8 @@ export async function POST(request: Request) {
   const orderId = form.orderId ?? form.Moid
   const amountStr = form.amount ?? form.Amt
   const authToken = form.authToken ?? form.AuthToken
-  const nextAppUrl = form.nextAppURL ?? form.NextAppURL
-  const mid = form.mid ?? form.MID
+  const nextAppUrl = form.nextAppURL ?? form.NextAppURL ?? form.nextAppUrl
+  const mid = form.mid ?? form.MID ?? process.env.NICE_PAY_MID
 
   // 나이스페이: authResultCode '0000'만 인증 성공. 그 외(사용자 취소·창 닫기 등)는 취소로 통일해 PC 동작과 맞춤
   if (authResultCode !== '0000') {
@@ -122,6 +122,17 @@ export async function POST(request: Request) {
   }
 
   const amtStr = String(payment.amount)
+
+  // 레거시 승인에 필요한 값이 없으면 form 키만 로그(전달되는 파라미터명 확인용)
+  if (!nextAppUrl || !authToken) {
+    console.error('[payment/return] legacy_params_missing', {
+      orderId,
+      tid,
+      formKeys: Object.keys(form),
+      hasMid: !!mid,
+      hasMerchantKey: !!merchantKey,
+    })
+  }
 
   // 실결제(운영): U103 "사용자 인증타입이 맞지 않습니다" 방지 — 인증 응답의 NextAppURL + AuthToken으로 레거시 승인 사용
   if (nextAppUrl && authToken && mid && merchantKey) {
