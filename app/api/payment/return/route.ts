@@ -129,29 +129,32 @@ export async function POST(request: Request) {
     body: JSON.stringify({ amount: payment.amount }),
   })
 
-  const result = await res.json().catch(() => ({})) as {
+  const raw = await res.json().catch(() => ({})) as Record<string, unknown>
+  const result = (raw?.result != null ? raw.result : raw) as {
     resultCode?: string | number
     status?: string
     paidAt?: string | number | null
     amount?: number | string
   }
-  const resultCodeOk = String(result.resultCode ?? '') === '0000'
-  const statusOk = String(result.status ?? '').toLowerCase() === 'paid'
+  const resultCodeOk = String(result?.resultCode ?? '') === '0000'
+  const statusOk = String(result?.status ?? '').toLowerCase() === 'paid'
   const paidAtOk =
-    result.paidAt != null &&
+    result?.paidAt != null &&
     String(result.paidAt).trim() !== '' &&
     String(result.paidAt) !== '0'
-  const amountOk = Number(result.amount) === Number(payment.amount)
-  const approved = resultCodeOk && statusOk && paidAtOk && amountOk
+  const amountOk = Number(result?.amount) === Number(payment.amount)
+  const approved = resultCodeOk && amountOk && (statusOk || paidAtOk)
   if (!approved) {
     console.error('[payment/return] approval_failed', {
       orderId,
       tid,
       resStatus: res.status,
-      resultCode: result.resultCode,
-      status: result.status,
-      paidAt: result.paidAt,
-      amount: result.amount,
+      resOk: res.ok,
+      raw: raw,
+      resultCode: result?.resultCode,
+      status: result?.status,
+      paidAt: result?.paidAt,
+      amount: result?.amount,
       paymentAmount: payment.amount,
     })
     await supabase
