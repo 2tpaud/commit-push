@@ -134,6 +134,13 @@ export async function POST(request: Request) {
   const code = String(payload.ResultCode ?? payload.resultCode ?? payload.resultCd ?? '')
   const ok = code === '2001' || code === '0000'
   if (!ok) {
+    console.error('[payment/cancel] pg_cancel_failed', {
+      paymentId,
+      code,
+      resultMsg: payload.ResultMsg ?? payload.resultMsg,
+      resStatus: cancelRes.status,
+      payload,
+    })
     return NextResponse.json(
       {
         error: 'cancel_failed',
