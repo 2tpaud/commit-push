@@ -13,8 +13,16 @@ function getBasicAuth(): string {
   return Buffer.from(credentials, 'utf8').toString('base64')
 }
 
-/** 모바일 인앱 브라우저/WebView에서 302 리다이렉트가 멈춤 현상을 피하기 위해 200 + HTML로 즉시 이동 */
-function redirectToPlan(request: Request, path = '/plan', searchParams?: Record<string, string>) {
+/**
+ * 가맹점 결과 페이지(Plan)로 이동하는 HTML 응답.
+ * @param status - 취소/실패 시 400을 주면 PG사가 returnUrl 응답을 실패로 기록해, PC(실패 로그)와 모바일 동작을 맞출 수 있음. 성공 시 200.
+ */
+function redirectToPlan(
+  request: Request,
+  path = '/plan',
+  searchParams?: Record<string, string>,
+  status = 200
+) {
   const origin = new URL(request.url).origin
   const url = new URL(path, origin)
   if (searchParams) {
@@ -22,24 +30,38 @@ function redirectToPlan(request: Request, path = '/plan', searchParams?: Record<
   }
   const target = url.toString()
   const targetEscaped = target.replace(/&/g, '&amp;').replace(/"/g, '&quot;')
-  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=${targetEscaped}"></head><body><p>이동 중...</p><script>window.location.replace(${JSON.stringify(target)});</script></body></html>`
+  const script = `
+    (function(){
+      var t = ${JSON.stringify(target)};
+      try {
+        if (window.top && window.top !== window.self) {
+          window.top.location.replace(t);
+        } else {
+          window.location.replace(t);
+        }
+      } catch (e) {
+        window.location.replace(t);
+      }
+    })();
+  `
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=${targetEscaped}"></head><body><p>이동 중...</p><script>${script}</script></body></html>`
   return new NextResponse(html, {
-    status: 200,
+    status,
     headers: { 'Content-Type': 'text/html; charset=utf-8' },
   })
 }
 
 /**
- * GET: 결제창을 닫거나 취소한 뒤 모바일/일부 환경에서 returnUrl로 GET 리다이렉트만 오는 경우 처리.
- * 200 + HTML 리다이렉트로 응답해 모바일 WebView에서 화면 멈춤 방지.
+ * GET: 결제창 닫기 등으로 returnUrl에 GET만 오는 경우. 400으로 응답해 PG 로그에 실패로 남기고(PC와 동일), 본문 HTML로 /plan 이동.
  */
 export async function GET(request: Request) {
-  return redirectToPlan(request, '/plan', { error: 'cancelled' })
+  return redirectToPlan(request, '/plan', { error: 'cancelled' }, 400)
 }
 
 export async function POST(request: Request) {
-  const fail = (reason: string) => redirectToPlan(request, '/plan', { error: reason })
-  const success = () => redirectToPlan(request, '/plan', { success: '1' })
+  /** 취소/실패 시 400 응답 → PG사가 returnUrl 호출을 실패로 기록, PC와 동일하게 로그 통일 */
+  const fail = (reason: string) => redirectToPlan(request, '/plan', { error: reason }, 400)
+  const success = () => redirectToPlan(request, '/plan', { success: '1' }, 200)
 
   let form: Record<string, string>
   const contentType = request.headers.get('content-type') ?? ''
@@ -56,13 +78,13 @@ export async function POST(request: Request) {
   const orderId = form.orderId
   const amountStr = form.amount
 
-  // 나이스페이: authResultCode '0000'만 인증 성공, 그 외(취소·실패)는 인증 실패
+  // 나이스페이: authResultCode '0000'만 인증 성공. 그 외(사용자 취소·창 닫기 등)는 취소로 통일해 PC 동작과 맞춤
   if (authResultCode !== '0000') {
-    return fail('auth_failed')
+    return fail('cancelled')
   }
-  // 인증 성공이어도 메시지에 취소/실패 문구가 있으면 인증 실패로 간주 (모바일 등 일부 환경 대비)
+  // 인증 성공이어도 메시지에 취소/실패 문구가 있으면 취소로 간주 (모바일 등)
   if (/취소|cancel|실패|fail|오류|error/i.test(authResultMsg)) {
-    return fail('auth_failed')
+    return fail('cancelled')
   }
   if (!tid || !orderId || amountStr === undefined) {
     return fail('invalid_callback')
