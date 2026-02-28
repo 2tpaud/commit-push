@@ -9,6 +9,7 @@ import { supabase } from '@/lib/supabaseClient'
 import NewNoteDialog from '@/components/NewNoteDialog'
 import CommitPushDialog from '@/components/CommitPushDialog'
 import { getLimitsForPlan } from '@/lib/planLimits'
+import { useAuthSession } from '@/components/AuthUserProvider'
 import AppSidebar from './AppSidebar'
 import { Button } from './ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar'
@@ -156,12 +157,21 @@ async function fetchUserProfile(userId: string): Promise<UserProfile> {
 
 /** 사이드바 + 헤더(CommitPush, 로그아웃)를 공통으로 쓰는 레이아웃. 모든 페이지에서 동일한 사이드바 유지 */
 export default function SharedAppLayout({ user, children }: SharedAppLayoutProps) {
+  const session = useAuthSession()
   const [profile, setProfile] = useState<UserProfile | null>(() => profileCache[user.id] ?? null)
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const [showNewNoteDialog, setShowNewNoteDialog] = useState(false)
   const [showCommitPushDialog, setShowCommitPushDialog] = useState(false)
   const [notifications, setNotifications] = useState<NotificationRow[]>([])
   const [notificationOpen, setNotificationOpen] = useState(false)
+
+  const fetchNotifications = () => {
+    const headers: HeadersInit = {}
+    if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`
+    return fetch('/api/notifications', { credentials: 'include', headers })
+      .then((res) => (res.ok ? res.json() : []))
+      .then((list: NotificationRow[]) => (Array.isArray(list) ? list : []))
+  }
 
   useEffect(() => {
     let mounted = true
@@ -170,15 +180,14 @@ export default function SharedAppLayout({ user, children }: SharedAppLayoutProps
       setProfile(next)
       profileCache[user.id] = next
     })
-    fetch('/api/notifications')
-      .then((res) => (res.ok ? res.json() : []))
-      .then((list: NotificationRow[]) => {
+    fetchNotifications()
+      .then((list) => {
         if (!mounted) return
-        setNotifications(Array.isArray(list) ? list : [])
+        setNotifications(list)
       })
       .catch(() => {})
     return () => { mounted = false }
-  }, [user.id])
+  }, [user.id, session?.access_token])
 
   const refetchProfile = () => {
     fetchUserProfile(user.id).then((next) => {
@@ -254,9 +263,8 @@ export default function SharedAppLayout({ user, children }: SharedAppLayoutProps
                   <DropdownMenu open={notificationOpen} onOpenChange={(open) => {
                     setNotificationOpen(open)
                     if (open) {
-                      fetch('/api/notifications')
-                        .then((res) => res.ok ? res.json() : [])
-                        .then((list: NotificationRow[]) => setNotifications(Array.isArray(list) ? list : []))
+                      fetchNotifications()
+                        .then(setNotifications)
                         .catch(() => setNotifications([]))
                     }
                   }}>
@@ -294,7 +302,13 @@ export default function SharedAppLayout({ user, children }: SharedAppLayoutProps
                             onSelect={async (e) => {
                               e.preventDefault()
                               if (!n.read_at) {
-                                await fetch(`/api/notifications/${n.id}/read`, { method: 'PATCH' })
+                                const headers: HeadersInit = {}
+                                if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`
+                                await fetch(`/api/notifications/${n.id}/read`, {
+                                  method: 'PATCH',
+                                  credentials: 'include',
+                                  headers,
+                                })
                                 setNotifications((prev) =>
                                   prev.map((x) => (x.id === n.id ? { ...x, read_at: new Date().toISOString() } : x))
                                 )

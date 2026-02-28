@@ -73,6 +73,11 @@
 - **구현**: 쿠키 세션 우선, 없으면 `Authorization: Bearer` 토큰으로 인증. layout에서 `access_token` 전달.
 - **결과**: 로컬·배포 모두 정상 동작.
 
+**결제 후 알림창에 알림이 안 뜨는 문제**
+- **배경**: 결제 return으로 `/plan` 복귀 시 쿠키 미전달로 `GET /api/notifications` 401 → 알림 목록 빈 배열, 벨 클릭 시 "알림이 없습니다"만 표시.
+- **구현**: `/api/notifications` GET·PATCH `/api/notifications/[id]/read`에 쿠키 없을 때 **Bearer fallback** 추가. `SharedAppLayout`에서 `useAuthSession()`으로 토큰 넘겨 알림 조회·읽음 처리 시 Bearer 헤더 전달.
+- **결과**: 결제 완료/취소 알림이 알림창에 정상 표시.
+
 **나이스페이 승인 API 401(U116) 대응**
 - **배경**: 실결제 시 `NICE_PAY_API_BASE` 미등록으로 기본값(sandbox) 사용 → 나이스페이 401 "사용자 정보가 존재하지 않습니다".
 - **구현**: 나이스페이 승인 API가 401 반환 시 `nicepay_auth` 에러로 분리, Plan 페이지에 환경 변수 확인 안내 메시지 표시.
@@ -111,6 +116,9 @@ API 컴포넌트:
 **결제 return**
 - `app/api/payment/return/route.ts`: 세션 미사용, 서비스 롤로 `order_id` 기준 조회·승인·갱신. **NICE_PAY_MERCHANT_KEY 없으면** v1 API(Basic 인증), **있으면** 레거시 pay_process.jsp 승인. 나이스페이 401 시 `nicepay_auth` 반환.
 
+**알림 API**
+- `app/api/notifications/route.ts`, `app/api/notifications/[id]/read/route.ts`: 쿠키 세션 없으면 `Authorization: Bearer`로 인증(결제 return 후 알림 표시용). `SharedAppLayout`: `useAuthSession()`으로 토큰 전달해 조회·읽음 처리.
+
 ---
 
 문서화:
@@ -118,6 +126,7 @@ API 컴포넌트:
 **ARCHITECTURE.md**
 - `/api/payment/return`에 승인 방식(v1 vs 레거시·NICE_PAY_MERCHANT_KEY), Basic 인증 키 권장, PG 리다이렉트 시 세션 없이 서비스 롤 사용 명시
 - `NICE_PAY_MERCHANT_KEY` 선택 변수, `NICE_PAY_MID` 선택(미설정 시 clientId) 반영
+- `/api/notifications` GET·PATCH에 쿠키 없을 때 Bearer fallback(결제 return 후 알림 표시용) 명시
 - `/api/payment/cancel` 역할 명시
 - `/api/payment/webhook`에 승인/취소 이벤트 처리 및 `payment_cancelled` 알림 반영 내용 추가
 - `/api/plan/check-expiry`에 만료 임박 알림(`plan_expiry_3days`, `plan_expiry_1day`) 생성 내용 추가
