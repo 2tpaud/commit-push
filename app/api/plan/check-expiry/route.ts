@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 
 function getDaysLeft(expiresAt: Date): number {
   const diffMs = expiresAt.getTime() - Date.now()
@@ -7,7 +7,7 @@ function getDaysLeft(expiresAt: Date): number {
 }
 
 async function notifyPlanExpiry(
-  supabase: ReturnType<typeof createClient>,
+  supabase: SupabaseClient,
   userId: string,
   plan: string,
   expiresAt: Date,
