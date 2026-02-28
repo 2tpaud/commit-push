@@ -14,15 +14,10 @@ function getBasicAuth(): string {
 }
 
 /**
- * 가맹점 결과 페이지(Plan)로 이동하는 HTML 응답.
- * @param status - 취소/실패 시 400을 주면 PG사가 returnUrl 응답을 실패로 기록해, PC(실패 로그)와 모바일 동작을 맞출 수 있음. 성공 시 200.
+ * returnUrl 공통 응답: PC/모바일 구분 없이 항상 200 + HTML로 /plan 이동.
+ * (성공·취소·실패 모두 동일한 형식으로 응답)
  */
-function redirectToPlan(
-  request: Request,
-  path = '/plan',
-  searchParams?: Record<string, string>,
-  status = 200
-) {
+function redirectToPlan(request: Request, path = '/plan', searchParams?: Record<string, string>) {
   const origin = new URL(request.url).origin
   const url = new URL(path, origin)
   if (searchParams) {
@@ -46,22 +41,18 @@ function redirectToPlan(
   `
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=${targetEscaped}"></head><body><p>이동 중...</p><script>${script}</script></body></html>`
   return new NextResponse(html, {
-    status,
+    status: 200,
     headers: { 'Content-Type': 'text/html; charset=utf-8' },
   })
 }
 
-/**
- * GET: 결제창 닫기 등으로 returnUrl에 GET만 오는 경우. 400으로 응답해 PG 로그에 실패로 남기고(PC와 동일), 본문 HTML로 /plan 이동.
- */
 export async function GET(request: Request) {
-  return redirectToPlan(request, '/plan', { error: 'cancelled' }, 400)
+  return redirectToPlan(request, '/plan', { error: 'cancelled' })
 }
 
 export async function POST(request: Request) {
-  /** 취소/실패 시 400 응답 → PG사가 returnUrl 호출을 실패로 기록, PC와 동일하게 로그 통일 */
-  const fail = (reason: string) => redirectToPlan(request, '/plan', { error: reason }, 400)
-  const success = () => redirectToPlan(request, '/plan', { success: '1' }, 200)
+  const fail = (reason: string) => redirectToPlan(request, '/plan', { error: reason })
+  const success = () => redirectToPlan(request, '/plan', { success: '1' })
 
   let form: Record<string, string>
   const contentType = request.headers.get('content-type') ?? ''
