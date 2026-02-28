@@ -16,7 +16,7 @@
   - `paid_at` 기준 24시간 이내인지 확인
   - `tid` 존재 여부 확인
 - **PG 요청**:
-  - 취소 URL: 기본 `{NICE_PAY_API_BASE}/webapi/cancel_process.jsp`
+  - 취소 URL: 실결제 시 `dc1-api.nicepay.co.kr`(api.nicepay.co.kr은 404). `NICE_PAY_CANCEL_API_URL`로 오버라이드 가능.
   - 요청 타입: `application/x-www-form-urlencoded`
   - 주요 파라미터: `TID`, `MID`, `Moid(order_id)`, `CancelAmt`, `CancelMsg`, `PartialCancelCode=0`, `EdiDate`, `SignData`
   - 서명: `hex(sha256(MID + CancelAmt + EdiDate + SecretKey))`
@@ -73,6 +73,10 @@
 - **구현**: 쿠키 세션 우선, 없으면 `Authorization: Bearer` 토큰으로 인증. layout에서 `access_token` 전달.
 - **결과**: 로컬·배포 모두 정상 동작.
 
+**취소 API 401/404 수정**
+- **401**: 배포 환경에서 쿠키 미전달 시 Bearer fallback 추가(notifications·check-expiry와 동일).
+- **404**: 실결제 시 `api.nicepay.co.kr/webapi/cancel_process.jsp`는 404. `dc1-api.nicepay.co.kr/webapi/cancel_process.jsp` 사용.
+
 **결제 후 알림창에 알림이 안 뜨는 문제**
 - **배경**: 결제 return으로 `/plan` 복귀 시 쿠키 미전달로 `GET /api/notifications` 401 → 알림 목록 빈 배열, 벨 클릭 시 "알림이 없습니다"만 표시.
 - **구현**: `/api/notifications` GET·PATCH `/api/notifications/[id]/read`에 쿠키 없을 때 **Bearer fallback** 추가. `SharedAppLayout`에서 `useAuthSession()`으로 토큰 넘겨 알림 조회·읽음 처리 시 Bearer 헤더 전달.
@@ -104,7 +108,7 @@ API 컴포넌트:
 
 **취소 API**
 - `app/api/payment/cancel/route.ts` 추가
-- 취소 가능 조건/권한/기간 체크 + PG 취소 호출 + DB 반영 + 취소 알림 생성
+- 인증: 쿠키 세션 우선, 없으면 Bearer(배포 환경 401 대비). 취소 가능 조건/권한/기간 체크 + PG 취소 호출 + DB 반영 + 취소 알림 생성. 실결제 시 취소 URL은 dc1-api.nicepay.co.kr(api.nicepay.co.kr은 404).
 
 **웹훅**
 - `app/api/payment/webhook/route.ts`에 취소 이벤트 분기 추가
