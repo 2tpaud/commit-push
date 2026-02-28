@@ -1,6 +1,49 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
+function getDaysLeft(expiresAt: Date): number {
+  const diffMs = expiresAt.getTime() - Date.now()
+  return Math.ceil(diffMs / (1000 * 60 * 60 * 24))
+}
+
+async function notifyPlanExpiry(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+  plan: string,
+  expiresAt: Date,
+  daysLeft: number
+) {
+  const type = daysLeft === 3 ? 'plan_expiry_3days' : daysLeft === 1 ? 'plan_expiry_1day' : null
+  if (!type) return
+
+  // 같은 날짜/유형 중복 알림 방지
+  const now = new Date()
+  const dayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0))
+  const dayEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1, 0, 0, 0))
+  const { data: existing } = await supabase
+    .from('notifications')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('type', type)
+    .gte('created_at', dayStart.toISOString())
+    .lt('created_at', dayEnd.toISOString())
+    .limit(1)
+
+  if (existing && existing.length > 0) return
+
+  const planLabel = plan === 'team' ? 'Team' : plan === 'pro' ? 'Pro' : plan
+  const expiresLabel = expiresAt.toLocaleDateString('ko-KR')
+  const dayLabel = `D-${daysLeft}`
+
+  await supabase.from('notifications').insert({
+    user_id: userId,
+    type,
+    payment_id: null,
+    title: `${planLabel} 플랜 만료 ${dayLabel}`,
+    body: `현재 ${planLabel} 플랜이 ${expiresLabel}에 만료됩니다. (${dayLabel})`,
+  })
+}
+
 /**
  * GET: plan_expires_at이 지났으면 해당 사용자를 free 플랜으로 전환합니다.
  * Authorization: Bearer <access_token> 필요.
@@ -41,6 +84,10 @@ export async function GET(request: Request) {
 
   const expiresAt = new Date(planExpiresAt)
   if (expiresAt > new Date()) {
+    const daysLeft = getDaysLeft(expiresAt)
+    if (daysLeft === 3 || daysLeft === 1) {
+      await notifyPlanExpiry(supabase, user.id, plan, expiresAt, daysLeft)
+    }
     return NextResponse.json({ ok: true, updated: false })
   }
 

@@ -34,13 +34,13 @@ BigQuery 기반 실행 분석 시스템
 
 ### API (Next.js Route Handlers)
 
-- **`/api/plan/check-expiry`**: 대시보드 진입·로그인 시 **비동기** 호출(화면 진입 블로킹 없음). `plan_expires_at`이 지난 유료 플랜 사용자를 `plan = 'free'`, `plan_expires_at = null`로 갱신. (요금제·한도·결제 상세는 [PLAN.md](./PLAN.md) 참고.)
+- **`/api/plan/check-expiry`**: 대시보드 진입·로그인 시 **비동기** 호출(화면 진입 블로킹 없음). `plan_expires_at`이 지난 유료 플랜 사용자를 `plan = 'free'`, `plan_expires_at = null`로 갱신. 또한 만료 임박 시점(`D-3`, `D-1`)에는 `notifications`에 `plan_expiry_3days`/`plan_expiry_1day` 알림을 생성(동일 타입·동일 일자 중복 방지). (요금제·한도·결제 상세는 [PLAN.md](./PLAN.md) 참고.)
 - **`/api/payment/config`**: GET — 결제창용 `clientId` 반환 (클라이언트에서 나이스페이 SDK 전 환경 변수 노출 없이 조회).
 - **`/api/payment/create`**: 나이스페이 주문 생성 후 결제창 호출용 `orderId`, `amount`, `goodsName` 반환.
 - **`/api/payment/return`**: 결제 완료/취소 후 콜백. GET은 취소로 간주. POST는 `authResultCode='0000'`일 때만 승인 API 호출 후 `payments`·`users.plan`·`plan_expires_at`·`notifications` 반영. 응답은 PC/모바일 동일하게 **200 + HTML**(클라이언트 리다이렉트로 `/plan` 이동).
 - **`/api/payment/cancel`**: 결제 승인 후 취소(환불) 처리. 요청 사용자 본인 결제 건(`payments.id`)만 처리하며, `status='paid'`이고 `paid_at` 기준 24시간 이내일 때만 나이스페이 취소 API 호출 후 `payments.status='cancelled'`로 갱신. 현재 플랜이 해당 결제로 반영된 상태면 `users.plan='free'`, `plan_expires_at=null`로 복구.
 - **`/api/payment/webhook`**: 나이스페이 웹훅(결제 승인/취소 이벤트). GET/HEAD/OPTIONS는 URL 등록 검증용 200 반환. POST: 서명 검증 후 승인 이벤트는 승인 API 호출·DB 갱신 및 `payment_approved` 알림 삽입, 취소 이벤트(API/관리자 취소)는 `payments.status='cancelled'`·`users.plan='free'` 반영 및 `payment_cancelled` 알림 삽입. 응답 `Content-Type: text/html`, body `OK`.
-- **`/api/notifications`**: GET — 로그인 사용자 알림 목록. PATCH `/api/notifications/[id]/read` — 읽음 처리.
+- **`/api/notifications`**: GET — 로그인 사용자 알림 목록(`payment_approved`, `payment_cancelled`, `plan_expiry_3days`, `plan_expiry_1day` 등). PATCH `/api/notifications/[id]/read` — 읽음 처리.
 - **`/api/activity`**: GET — 연도별 활동 집계(`year` 쿼리). 홈 활동 그래프(ContributionGraph)에서 노트·커밋의 **생성·수정** 일별 횟수 조회(노트/커밋 모두 `created_at`, `updated_at` 반영). 클라이언트: 레이아웃에서 세션 확보 시 현재 연도 **프리페치**, `src/lib/activityCache.ts`로 연도별 캐시·진행 중 요청 공유 → 재진입 시 로딩 최소화.
 - **`/api/docs/[slug]`**: GET — 문서 원문 조회. `slug`는 `architecture` | `database` | `design` | `plan` | `product` 중 하나. 개발자 노트 등에서 docs 마크다운 로드 시 사용.
 

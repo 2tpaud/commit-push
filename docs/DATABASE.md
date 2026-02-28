@@ -311,7 +311,7 @@ comment on column public.payments.billing_cycle is
 
 ## notifications 테이블 (앱 내 알림)
 
-헤더 벨 아이콘에 표시하는 **앱 내 알림 전반**을 저장하는 테이블입니다. 현재는 결제 완료 알림(`payment_approved`)과 결제 취소 알림(`payment_cancelled`)을 사용하며, 추후 팀 협업(초대·멘션 등)·기타 이벤트 알림으로 확장할 예정입니다. `type`으로 구분하고, 결제 완료 알림만 `payment_id`를 사용합니다.
+헤더 벨 아이콘에 표시하는 **앱 내 알림 전반**을 저장하는 테이블입니다. 현재는 결제 완료 알림(`payment_approved`), 결제 취소 알림(`payment_cancelled`), 만료 임박 알림(`plan_expiry_3days`, `plan_expiry_1day`)을 사용하며, 추후 팀 협업(초대·멘션 등)·기타 이벤트 알림으로 확장할 예정입니다. `type`으로 구분하고, 결제 완료 알림만 `payment_id`를 사용합니다.
 
 ### 테이블 생성
 
@@ -366,7 +366,7 @@ comment on column public.notifications.id is
 comment on column public.notifications.user_id is
 '알림 수신 사용자. auth.users(id) 참조.';
 comment on column public.notifications.type is
-'알림 유형. payment_approved(결제 완료), payment_cancelled(결제 취소) / 팀 초대·멘션 등 추후 확장.';
+'알림 유형. payment_approved(결제 완료), payment_cancelled(결제 취소), plan_expiry_3days(D-3), plan_expiry_1day(D-1) / 팀 초대·멘션 등 추후 확장.';
 comment on column public.notifications.payment_id is
 '결제 완료 알림일 때만 사용. payments(id) 참조. 결제당 1건 제한(unique). 다른 type은 null.';
 comment on column public.notifications.title is
@@ -381,7 +381,7 @@ comment on column public.notifications.created_at is
 
 **실행 순서**: payments 테이블 생성 후 실행하면 됩니다.
 
-**알림 사용처**: return URL·웹훅에서 결제 완료 시 `payment_approved` 1건 삽입, 결제 취소(API/관리자 취소) 시 `payment_cancelled` 1건 삽입. 대시보드 헤더 벨 아이콘(`SharedAppLayout`)에서 조회·표시하며, 클릭 시 읽음 처리(`PATCH /api/notifications/[id]/read`). 팀 협업 등 추가 알림은 동일 테이블에 `type`만 다르게 넣어 확장.
+**알림 사용처**: return URL·웹훅에서 결제 완료 시 `payment_approved` 1건 삽입, 결제 취소(API/관리자 취소) 시 `payment_cancelled` 1건 삽입, 로그인/대시보드 진입 시 `check-expiry`에서 만료 임박(`D-3`, `D-1`)이면 `plan_expiry_3days`/`plan_expiry_1day` 삽입(동일 타입·동일 일자 중복 방지). 대시보드 헤더 벨 아이콘(`SharedAppLayout`)에서 조회·표시하며, 클릭 시 읽음 처리(`PATCH /api/notifications/[id]/read`). 팀 협업 등 추가 알림은 동일 테이블에 `type`만 다르게 넣어 확장.
 
 ## notes 테이블
 

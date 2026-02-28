@@ -36,6 +36,7 @@ interface UserProfile {
   total_notes: number
   total_commits: number
   plan: string | null
+  plan_expires_at: string | null
 }
 
 /** 플랜명 표시용 (free -> Free, pro -> Pro, team -> Team) */
@@ -54,13 +55,24 @@ function UsageGaugesInMenu({ profile }: { profile: UserProfile }) {
   const notePct = Math.min(100, (profile.total_notes / limits.maxNotes) * 100)
   const commitPct = Math.min(100, (profile.total_commits / limits.maxCommits) * 100)
   const planName = getPlanDisplayName(profile.plan)
+  const isPaidPlan = profile.plan === 'pro' || profile.plan === 'team'
+  const expiresAt = profile.plan_expires_at ? new Date(profile.plan_expires_at) : null
+  const expiresAtValid = Boolean(expiresAt && !Number.isNaN(expiresAt.getTime()))
+  const dDay = expiresAtValid
+    ? Math.max(0, Math.ceil((expiresAt!.getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
+    : null
 
   return (
     <div className="px-2 py-1.5">
-      <div className="mb-2 flex items-center">
+      <div className="mb-2 flex items-center gap-2">
         <Badge variant="outline" className="border-border font-medium text-foreground">
           {planName}
         </Badge>
+        {isPaidPlan && expiresAtValid ? (
+          <span className="text-xs text-muted-foreground">
+            {expiresAt!.toLocaleDateString('ko-KR')} (D-{dDay}일)
+          </span>
+        ) : null}
       </div>
       <div className="space-y-2.5">
         <div className="space-y-1">
@@ -119,7 +131,7 @@ const profileCache: Record<string, UserProfile> = {}
 async function fetchUserProfile(userId: string): Promise<UserProfile> {
   const { data, error } = await supabase
     .from('users')
-    .select('avatar_url, full_name, total_notes, total_commits, plan')
+    .select('avatar_url, full_name, total_notes, total_commits, plan, plan_expires_at')
     .eq('id', userId)
     .single()
   if (error || !data) {
@@ -129,6 +141,7 @@ async function fetchUserProfile(userId: string): Promise<UserProfile> {
       total_notes: 0,
       total_commits: 0,
       plan: 'free',
+      plan_expires_at: null,
     }
   }
   return {
@@ -137,6 +150,7 @@ async function fetchUserProfile(userId: string): Promise<UserProfile> {
     total_notes: data.total_notes ?? 0,
     total_commits: data.total_commits ?? 0,
     plan: data.plan ?? 'free',
+    plan_expires_at: data.plan_expires_at ?? null,
   }
 }
 
@@ -285,7 +299,12 @@ export default function SharedAppLayout({ user, children }: SharedAppLayoutProps
                                   prev.map((x) => (x.id === n.id ? { ...x, read_at: new Date().toISOString() } : x))
                                 )
                               }
-                              if (n.type === 'payment_approved') {
+                              if (
+                                n.type === 'payment_approved' ||
+                                n.type === 'payment_cancelled' ||
+                                n.type === 'plan_expiry_3days' ||
+                                n.type === 'plan_expiry_1day'
+                              ) {
                                 window.location.href = '/plan'
                               }
                             }}
