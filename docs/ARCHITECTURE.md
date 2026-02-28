@@ -14,13 +14,13 @@ shadcn/ui
 
 ### Authentication
 
-Supabase Auth (Google OAuth). 공개 라우트: `/`(랜딩), `/pricing`(이용요금). `/login`은 `/`로 리다이렉트. 랜딩·이용요금에서 로그인/지금 시작하기 클릭 시 Google OAuth 직접 호출.
+Supabase Auth (Google OAuth). **주요 라우트**: 공개 — `/`(랜딩), `/pricing`(이용요금). 로그인 필요 — `/plan`(요금제·결제), `/activity`, `/developer-notes`, `/notes/*` 등. `/login`은 `/`로 리다이렉트. 랜딩·이용요금에서 로그인/지금 시작하기 클릭 시 Google OAuth 직접 호출. (라우트·UI 상세는 [DESIGN.md](./DESIGN.md), 요금제는 [PLAN.md](./PLAN.md) 참고.)
 
 ### Operational Database
 
 Supabase (PostgreSQL)
 
-- [데이터베이스 스키마](./DATABASE.md) - 테이블 구조 및 스키마 상세
+- [데이터베이스 스키마](./DATABASE.md) — 테이블 구조 및 스키마 상세. 요금제·한도는 `users.plan`, `users.plan_expires_at`, `users.total_notes`, `users.total_commits` 사용. 결제 이력은 `payments` 테이블. (요금제 정책·결제 흐름은 [PLAN.md](./PLAN.md) 참고.)
 
 ### File Handling (Google Drive 첨부)
 
@@ -34,14 +34,16 @@ BigQuery 기반 실행 분석 시스템
 
 ### API (Next.js Route Handlers)
 
-- **`/api/plan/check-expiry`**: 대시보드 진입·로그인 시 **비동기** 호출(화면 진입 블로킹 없음). `plan_expires_at`이 지난 유료 플랜 사용자를 `plan = 'free'`로 갱신.
+- **`/api/plan/check-expiry`**: 대시보드 진입·로그인 시 **비동기** 호출(화면 진입 블로킹 없음). `plan_expires_at`이 지난 유료 플랜 사용자를 `plan = 'free'`, `plan_expires_at = null`로 갱신. (요금제·한도·결제 상세는 [PLAN.md](./PLAN.md) 참고.)
 - **`/api/payment/config`**: GET — 결제창용 `clientId` 반환 (클라이언트에서 나이스페이 SDK 전 환경 변수 노출 없이 조회).
 - **`/api/payment/create`**: 나이스페이 주문 생성 후 결제창 호출용 `orderId`, `amount`, `goodsName` 반환.
-- **`/api/payment/return`**: 결제 완료 후 콜백. 승인 API 호출 후 `payments` 갱신, `users.plan` / `users.plan_expires_at` 반영, `notifications`에 결제 완료 알림 삽입.
+- **`/api/payment/return`**: 결제 완료/취소 후 콜백. GET은 취소로 간주. POST는 `authResultCode='0000'`일 때만 승인 API 호출 후 `payments`·`users.plan`·`plan_expires_at`·`notifications` 반영. 응답은 PC/모바일 동일하게 **200 + HTML**(클라이언트 리다이렉트로 `/plan` 이동). 결제 승인 후 취소/환불 API는 미구현.
 - **`/api/payment/webhook`**: 나이스페이 웹훅(결제 승인 시). GET/HEAD/OPTIONS는 URL 등록 검증용 200 반환. POST: 서명 검증 후 미처리 건만 승인 API 호출·DB 갱신, `notifications` 삽입. 응답 `Content-Type: text/html`, body `OK`.
 - **`/api/notifications`**: GET — 로그인 사용자 알림 목록. PATCH `/api/notifications/[id]/read` — 읽음 처리.
 - **`/api/activity`**: GET — 연도별 활동 집계(`year` 쿼리). 홈 활동 그래프(ContributionGraph)에서 노트·커밋의 **생성·수정** 일별 횟수 조회(노트/커밋 모두 `created_at`, `updated_at` 반영). 클라이언트: 레이아웃에서 세션 확보 시 현재 연도 **프리페치**, `src/lib/activityCache.ts`로 연도별 캐시·진행 중 요청 공유 → 재진입 시 로딩 최소화.
 - **`/api/docs/[slug]`**: GET — 문서 원문 조회. `slug`는 `architecture` | `database` | `design` | `plan` | `product` 중 하나. 개발자 노트 등에서 docs 마크다운 로드 시 사용.
+
+**결제(Plan) 요약**: 주문 생성 → 결제창(나이스페이 JS SDK) → returnUrl POST 시 승인 API 호출 → `users`·`payments`·`notifications` 갱신. 만료일 지나면 check-expiry로 `plan = 'free'` 전환. 구독 취소 버튼·다이얼로그는 UI만 있으며, PG 취소/환불 API 연동은 미구현. 흐름·DB 변화·한도·환경 변수 상세는 [PLAN.md](./PLAN.md) 참고.
 
 ### Deployment
 
@@ -64,4 +66,4 @@ Vercel
 
 - **Google Drive 연동(배포)**: `NEXT_PUBLIC_GOOGLE_CLIENT_ID`에 쓰는 OAuth 2.0 클라이언트(웹 앱)에 **배포 도메인**을 반드시 등록해야 함. [Google Cloud Console](https://console.cloud.google.com/) → APIs & Services → Credentials → 해당 OAuth 2.0 Client ID 편집 → **Authorized JavaScript origins**에 `https://www.commitpush.cloud`(또는 실제 배포 도메인) 추가 → **Authorized redirect URIs**에 `https://www.commitpush.cloud` 와 `https://www.commitpush.cloud/` 추가(슬래시 유무 모두). 저장 후 수 분 내 반영. 미등록 시 "400 redirect_uri_mismatch" 발생.
 - Supabase 키는 [Supabase 대시보드](https://supabase.com/dashboard) → 프로젝트 → Settings → API에서 확인.
-- 나이스페이 키는 [나이스페이 개발정보](https://start.nicepay.co.kr/manual/admin/developers/key/info.do)에서 발급. 운영 배포 시 `NICE_PAY_API_BASE`·`NEXT_PUBLIC_NICE_PAY_SDK_URL`을 운영 도메인/URL로 설정하고 운영 키로 교체.
+- 나이스페이 키는 [나이스페이 개발정보](https://start.nicepay.co.kr/manual/admin/developers/key/info.do)에서 발급. 운영 배포 시 `NICE_PAY_API_BASE`·`NEXT_PUBLIC_NICE_PAY_SDK_URL`을 운영 도메인/URL로 설정하고 운영 키로 교체. **결제 연동 환경 변수 기본값·운영 전환 상세**는 [PLAN.md](./PLAN.md) 5.1 참고.
