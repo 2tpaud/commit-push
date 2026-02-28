@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import crypto from 'crypto'
+import { createClient } from '@supabase/supabase-js'
 import { createServerSupabase } from '@/lib/supabaseServer'
 
 const NICEPAY_API_BASE = process.env.NICE_PAY_API_BASE ?? 'https://sandbox-api.nicepay.co.kr'
@@ -45,9 +46,27 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'config_error' }, { status: 500 })
   }
 
-  const supabase = await createServerSupabase()
-  const { data: auth } = await supabase.auth.getUser()
-  const user = auth.user
+  let supabase = await createServerSupabase()
+  let session = (await supabase.auth.getSession()).data.session
+  let user = session?.user
+
+  if (!user) {
+    const authHeader = request.headers.get('Authorization')
+    const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null
+    if (token && process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+      const client = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+        { global: { headers: { Authorization: `Bearer ${token}` } } }
+      )
+      const { data: { user: u } } = await client.auth.getUser()
+      if (u) {
+        user = u
+        supabase = client
+      }
+    }
+  }
+
   if (!user) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   }
