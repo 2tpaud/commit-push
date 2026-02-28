@@ -13,27 +13,33 @@ function getBasicAuth(): string {
   return Buffer.from(credentials, 'utf8').toString('base64')
 }
 
+/** 모바일 인앱 브라우저/WebView에서 302 리다이렉트가 멈춤 현상을 피하기 위해 200 + HTML로 즉시 이동 */
+function redirectToPlan(request: Request, path = '/plan', searchParams?: Record<string, string>) {
+  const origin = new URL(request.url).origin
+  const url = new URL(path, origin)
+  if (searchParams) {
+    Object.entries(searchParams).forEach(([k, v]) => url.searchParams.set(k, v))
+  }
+  const target = url.toString()
+  const targetEscaped = target.replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=${targetEscaped}"></head><body><p>이동 중...</p><script>window.location.replace(${JSON.stringify(target)});</script></body></html>`
+  return new NextResponse(html, {
+    status: 200,
+    headers: { 'Content-Type': 'text/html; charset=utf-8' },
+  })
+}
+
 /**
  * GET: 결제창을 닫거나 취소한 뒤 모바일/일부 환경에서 returnUrl로 GET 리다이렉트만 오는 경우 처리.
- * 나이스페이 정식 스펙은 returnUrl에 POST만 전송하지만, 창 닫기 시 GET만 오면 405가 나가 PG 로그 해석이 달라질 수 있으므로
- * GET은 무조건 취소로 간주하고 /plan으로 돌려보냄. (참고: https://start.nicepay.co.kr/manual/admin/developers/log/info.do)
+ * 200 + HTML 리다이렉트로 응답해 모바일 WebView에서 화면 멈춤 방지.
  */
 export async function GET(request: Request) {
-  const planPageUrl = new URL('/plan', request.url)
-  planPageUrl.searchParams.set('error', 'cancelled')
-  return NextResponse.redirect(planPageUrl.toString())
+  return redirectToPlan(request, '/plan', { error: 'cancelled' })
 }
 
 export async function POST(request: Request) {
-  const planPageUrl = new URL('/plan', request.url)
-  const fail = (reason: string) => {
-    planPageUrl.searchParams.set('error', reason)
-    return NextResponse.redirect(planPageUrl.toString())
-  }
-  const success = () => {
-    planPageUrl.searchParams.set('success', '1')
-    return NextResponse.redirect(planPageUrl.toString())
-  }
+  const fail = (reason: string) => redirectToPlan(request, '/plan', { error: reason })
+  const success = () => redirectToPlan(request, '/plan', { success: '1' })
 
   let form: Record<string, string>
   const contentType = request.headers.get('content-type') ?? ''
