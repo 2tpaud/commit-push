@@ -107,8 +107,20 @@ export async function POST(request: Request) {
     body: JSON.stringify({ amount: payment.amount }),
   })
 
-  const result = await res.json().catch(() => ({})) as { resultCode?: string; status?: string }
-  if (result.resultCode !== '0000' || result.status !== 'paid') {
+  const result = await res.json().catch(() => ({})) as {
+    resultCode?: string
+    status?: string
+    paidAt?: string | null
+    amount?: number
+  }
+  const approved =
+    result.resultCode === '0000' &&
+    result.status === 'paid' &&
+    typeof result.paidAt === 'string' &&
+    result.paidAt.trim() !== '' &&
+    result.paidAt !== '0' &&
+    Number(result.amount) === payment.amount
+  if (!approved) {
     await supabase
       .from('payments')
       .update({ status: 'failed' })

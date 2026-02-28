@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import Script from 'next/script'
@@ -148,6 +148,8 @@ export default function PlanPage() {
   /** 카드 클릭 시 선택 표시용 (null이면 현재 플랜 카드가 선택된 것처럼 표시) */
   const [selectedPlanId, setSelectedPlanId] = useState<PlanId | null>(null)
   const [payments, setPayments] = useState<PaymentRow[]>([])
+  /** 결제창 오픈 시각. 창만 닫고 돌아온 경우(returnUrl 미호출) 취소 메시지 표시용 */
+  const paymentStartedAtRef = useRef<number | null>(null)
 
   const effectiveClientId = NICE_PAY_CLIENT_ID || clientIdFromApi || ''
 
@@ -187,11 +189,13 @@ export default function PlanPage() {
     const success = searchParams?.get('success')
     const error = searchParams?.get('error')
     if (success === '1') {
+      paymentStartedAtRef.current = null
       setMessage({ type: 'success', text: '결제가 완료되었습니다. 플랜이 적용되었습니다.' })
       window.history.replaceState({}, '', '/plan')
       refetchProfile()
       refetchPayments()
     } else if (error) {
+      paymentStartedAtRef.current = null
       const messages: Record<string, string> = {
         cancelled: '결제를 취소하셨습니다.',
         auth_failed: '인증에 실패했습니다.',
@@ -209,6 +213,30 @@ export default function PlanPage() {
       window.history.replaceState({}, '', '/plan')
     }
   }, [searchParams, refetchProfile, refetchPayments])
+
+  // 모바일 등: 결제창만 닫고 돌아온 경우(returnUrl 미호출) 취소 메시지 표시
+  useEffect(() => {
+    let timeoutId: ReturnType<typeof setTimeout> | null = null
+    const handler = () => {
+      if (document.visibilityState !== 'visible') return
+      const started = paymentStartedAtRef.current
+      if (started == null) return
+      if (Date.now() - started < 2000) return
+      if (searchParams?.get('success') === '1' || searchParams?.get('error')) return
+      timeoutId = setTimeout(() => {
+        timeoutId = null
+        if (paymentStartedAtRef.current == null) return
+        if (typeof window !== 'undefined' && (window.location.search.includes('success=1') || window.location.search.includes('error='))) return
+        paymentStartedAtRef.current = null
+        setMessage({ type: 'error', text: '결제를 취소하셨습니다.' })
+      }, 400)
+    }
+    document.addEventListener('visibilitychange', handler)
+    return () => {
+      document.removeEventListener('visibilitychange', handler)
+      if (timeoutId != null) clearTimeout(timeoutId)
+    }
+  }, [searchParams])
 
   useEffect(() => {
     if (searchParams?.get('success') === '1' && user) {
@@ -313,6 +341,7 @@ export default function PlanPage() {
           return
         }
         const returnUrl = `${window.location.origin}/api/payment/return`
+        paymentStartedAtRef.current = Date.now()
         authNice.requestPay({
           clientId: effectiveClientId,
           method,
@@ -322,6 +351,7 @@ export default function PlanPage() {
           returnUrl,
           ...(method === 'vbank' && { vbankHolder: 'CommitPush' }),
           fnError(result) {
+            paymentStartedAtRef.current = null
             const msg = result?.errorMsg ?? '결제창 오류가 발생했습니다.'
             setPaymentErrorMsg(msg)
           },
