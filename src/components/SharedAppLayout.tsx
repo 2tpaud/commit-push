@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import type { User } from '@supabase/supabase-js'
-import { CreditCard, LogOut, FilePlus, MessageCircleMore, Bell } from 'lucide-react'
+import { CreditCard, LogOut, FilePlus, MessageCircleMore, Bell, MessageSquare } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import NewNoteDialog from '@/components/NewNoteDialog'
 import CommitPushDialog from '@/components/CommitPushDialog'
@@ -25,6 +25,7 @@ import {
 import { Badge } from './ui/badge'
 import { SidebarProvider, SidebarInset, SidebarTrigger } from './ui/sidebar'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
+import PushMindChatPanel, { type PushMindMessage } from './PushMindChatPanel'
 
 interface SharedAppLayoutProps {
   user: User
@@ -162,6 +163,8 @@ export default function SharedAppLayout({ user, children }: SharedAppLayoutProps
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const [showNewNoteDialog, setShowNewNoteDialog] = useState(false)
   const [showCommitPushDialog, setShowCommitPushDialog] = useState(false)
+  const [showPushMindChat, setShowPushMindChat] = useState(false)
+  const [pushMindMessages, setPushMindMessages] = useState<PushMindMessage[]>([])
   const [notifications, setNotifications] = useState<NotificationRow[]>([])
   const [notificationOpen, setNotificationOpen] = useState(false)
 
@@ -429,6 +432,26 @@ export default function SharedAppLayout({ user, children }: SharedAppLayoutProps
         user={user}
         isOpen={showCommitPushDialog}
         onClose={() => setShowCommitPushDialog(false)}
+      />
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="default"
+            size="icon"
+            className="fixed bottom-6 right-6 z-40 h-12 w-12 rounded-full bg-[#1F2A44] shadow-lg hover:bg-[#1F2A44]/90"
+            onClick={() => setShowPushMindChat(true)}
+            aria-label="PushMind 챗봇 열기"
+          >
+            <MessageSquare className="h-6 w-6" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="left">PushMind</TooltipContent>
+      </Tooltip>
+      <PushMindChatPanel
+        open={showPushMindChat}
+        onOpenChange={setShowPushMindChat}
+        messages={pushMindMessages}
+        setMessages={setPushMindMessages}
       />
     </SidebarProvider>
   )

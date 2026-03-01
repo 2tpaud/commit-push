@@ -753,6 +753,214 @@ execute function public.update_note_commit_stats();
 - **정책**: "Users can manage own commits"
   - 사용자는 자신의 커밋만 조회/수정/삭제 가능 (`auth.uid() = user_id`)
 
+## embeddings 테이블 (PushMind RAG)
+
+PushMind RAG 챗봇용 벡터 저장. 노트·커밋 청크의 embedding을 저장하고 유사도 검색에 사용한다. **Supabase에서 pgvector 확장이 활성화되어 있어야 한다.** (Dashboard → Database → Extensions → vector)
+
+### 테이블 생성
+
+```sql
+--------------------------------------------------
+-- 1. pgvector 확장 (최초 1회)
+--------------------------------------------------
+
+create extension if not exists vector;
+
+--------------------------------------------------
+-- 2. embeddings 테이블 생성
+--------------------------------------------------
+
+create table if not exists public.embeddings (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+
+  source_type text not null,
+  source_id uuid not null,
+  note_id uuid references public.notes(id) on delete cascade,
+
+  chunk_index integer default 0,
+  content_text text not null,
+
+  embedding vector(1536),
+
+  created_at timestamp with time zone default now()
+);
+
+comment on table public.embeddings is
+'PushMind RAG용 청크 벡터. source_type: note | commit, source_id: notes.id 또는 commits.id. text-embedding-3-small 기본 1536차원.';
+
+--------------------------------------------------
+-- 2. 컬럼 설명 (COMMENT)
+--------------------------------------------------
+
+comment on column public.embeddings.id is
+'embedding 레코드 고유 식별자(UUID). 기본키.';
+
+comment on column public.embeddings.user_id is
+'소유자. auth.users.id 참조. 본인 데이터만 검색·노출(RLS).';
+
+comment on column public.embeddings.source_type is
+'청크 출처 타입. note: 노트 요약 청크, commit: 커밋 1건 = 1청크.';
+
+comment on column public.embeddings.source_id is
+'출처 원본 ID. source_type이 note면 notes.id, commit이면 commits.id.';
+
+comment on column public.embeddings.note_id is
+'commit인 경우 소속 노트 ID. 출처 링크 생성 시 사용.';
+
+comment on column public.embeddings.chunk_index is
+'동일 source 내 청크 순서. 노트 요약은 0, 커밋은 sequence 등.';
+
+comment on column public.embeddings.content_text is
+'embedding에 사용한 원문. 검색 결과 미리보기·context 구성 시 사용.';
+
+comment on column public.embeddings.embedding is
+'OpenAI text-embedding-3-small 벡터(1536). dimensions 변경 시 vector(N) 수정.';
+
+comment on column public.embeddings.created_at is
+'embedding 생성 시각. 동기화 시점.';
+
+--------------------------------------------------
+-- 3. RLS
+--------------------------------------------------
+
+alter table public.embeddings enable row level security;
+
+drop policy if exists "Users can manage own embeddings" on public.embeddings;
+
+create policy "Users can manage own embeddings"
+  on public.embeddings for all
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+--------------------------------------------------
+-- 4. 인덱스 (user_id 조회, 유사도 검색)
+--------------------------------------------------
+
+create index if not exists idx_embeddings_user_id on public.embeddings(user_id);
+
+create index if not exists idx_embeddings_user_vector
+  on public.embeddings using ivfflat (embedding vector_cosine_ops)
+  with (lists = 100);
+
+--------------------------------------------------
+-- 5. 유사도 검색 함수 (PushMind RAG)
+--------------------------------------------------
+
+create or replace function public.match_embeddings(
+  query_embedding vector(1536),
+  p_user_id uuid,
+  match_count int default 10
+)
+returns table (
+  id uuid,
+  source_type text,
+  source_id uuid,
+  note_id uuid,
+  content_text text,
+  similarity float
+)
+language sql stable
+security definer
+set search_path = public, extensions
+as $$
+  select
+    e.id,
+    e.source_type,
+    e.source_id,
+    e.note_id,
+    e.content_text,
+    1 - (e.embedding <=> query_embedding) as similarity
+  from public.embeddings e
+  where e.user_id = p_user_id
+  order by e.embedding <=> query_embedding
+  limit match_count;
+$$;
+
+comment on function public.match_embeddings is
+'PushMind 유사도 검색. query_embedding과 코사인 유사도 상위 match_count개 반환. similarity는 0~1(1에 가까울수록 유사).';
+```
+
+### 보안 정책
+
+- **RLS**: `auth.uid() = user_id`로 본인 embedding만 조회·삽입·삭제 가능.
+- **유사도 검색**: API에서 `user_id = auth.uid()` 조건으로만 검색.
+
+---
+
+## user_llm_usage 테이블 (PushMind 비용 통제)
+
+PushMind 챗봇 사용자별 일일 토큰·요청 수 누적. 한도 체크 및 비용 통제에 사용.
+
+### 테이블 생성
+
+```sql
+--------------------------------------------------
+-- 1. user_llm_usage 테이블 생성
+--------------------------------------------------
+
+create table if not exists public.user_llm_usage (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  date date not null default current_date,
+
+  request_count integer default 0,
+  input_tokens integer default 0,
+  output_tokens integer default 0,
+
+  constraint user_llm_usage_user_date_unique unique(user_id, date)
+);
+
+comment on table public.user_llm_usage is
+'PushMind 일일 사용량. request_count, input_tokens, output_tokens 누적. 한도 체크 시 사용.';
+
+--------------------------------------------------
+-- 2. 컬럼 설명 (COMMENT)
+--------------------------------------------------
+
+comment on column public.user_llm_usage.id is
+'레코드 고유 식별자(UUID). 기본키.';
+
+comment on column public.user_llm_usage.user_id is
+'사용자. auth.users.id 참조.';
+
+comment on column public.user_llm_usage.date is
+'기준 일자. 당일 사용량 집계.';
+
+comment on column public.user_llm_usage.request_count is
+'해당 일자 PushMind 챗 요청 횟수.';
+
+comment on column public.user_llm_usage.input_tokens is
+'해당 일자 누적 입력(프롬프트) 토큰 수.';
+
+comment on column public.user_llm_usage.output_tokens is
+'해당 일자 누적 출력(답변) 토큰 수.';
+
+--------------------------------------------------
+-- 3. RLS (본인만 조회; 서버는 service_role로 upsert)
+--------------------------------------------------
+
+alter table public.user_llm_usage enable row level security;
+
+drop policy if exists "Users can view own llm usage" on public.user_llm_usage;
+
+create policy "Users can view own llm usage"
+  on public.user_llm_usage for select
+  using (auth.uid() = user_id);
+
+--------------------------------------------------
+-- 4. 인덱스
+--------------------------------------------------
+
+create index if not exists idx_user_llm_usage_user_date on public.user_llm_usage(user_id, date);
+```
+
+### 보안 정책
+
+- **RLS**: 사용자는 본인 행만 SELECT. INSERT/UPDATE는 서버(service_role)에서만 수행.
+
+---
+
 ## users.total_notes / total_commits 기존 데이터 동기화
 
 트리거 적용 전에 이미 존재하는 notes/commits 건수로 `users` 캐시를 맞출 때 아래를 한 번만 실행한다.

@@ -42,7 +42,9 @@ BigQuery 기반 실행 분석 시스템
 - **`/api/payment/webhook`**: 나이스페이 웹훅(결제 승인/취소 이벤트). GET/HEAD/OPTIONS는 URL 등록 검증용 200 반환. POST: 서명 검증 후 승인 이벤트는 승인 API 호출·DB 갱신 및 `payment_approved` 알림 삽입, 취소 이벤트(API/관리자 취소)는 `payments.status='cancelled'`·`users.plan='free'` 반영 및 `payment_cancelled` 알림 삽입. 응답 `Content-Type: text/html`, body `OK`.
 - **`/api/notifications`**: GET — 로그인 사용자 알림 목록(`payment_approved`, `payment_cancelled`, `plan_expiry_3days`, `plan_expiry_1day` 등). 인증: 쿠키 세션 우선, 없으면 `Authorization: Bearer`(배포·결제 return 후 알림 표시용). PATCH `/api/notifications/[id]/read` — 읽음 처리(Bearer 동일).
 - **`/api/activity`**: GET — 연도별 활동 집계(`year` 쿼리). 홈 활동 그래프(ContributionGraph)에서 노트·커밋의 **생성·수정** 일별 횟수 조회(노트/커밋 모두 `created_at`, `updated_at` 반영). 클라이언트: 레이아웃에서 세션 확보 시 현재 연도 **프리페치**, `src/lib/activityCache.ts`로 연도별 캐시·진행 중 요청 공유 → 재진입 시 로딩 최소화.
-- **`/api/docs/[slug]`**: GET — 문서 원문 조회. `slug`는 `architecture` | `database` | `design` | `plan` | `product` | `payment-test-checklist` 중 하나. 개발자 노트 등에서 docs 마크다운 로드 시 사용.
+- **`/api/docs/[slug]`**: GET — 문서 원문 조회. `slug`는 `architecture` | `database` | `design` | `plan` | `product` | `payment-test-checklist` | `pushmind-rag` 중 하나. 개발자 노트 등에서 docs 마크다운 로드 시 사용.
+- **`/api/pushmind/embed`**: POST — PushMind RAG용 embedding 동기화. Body `{}` | `{ noteId }` | `{ commitId }`. 전체/노트/커밋 단위로 청크 생성 후 OpenAI Embeddings API 호출, `embeddings` 테이블에 저장. 클라이언트는 패널 열 때마다 전체 동기화(`{}`) 호출. 인증: 쿠키 또는 Bearer.
+- **`/api/pushmind/chat`**: POST — PushMind 챗 질의. Body `{ message }`. 질문 embedding → 유사도 검색 → context 구성 → Chat Completions(gpt-4o-mini) → 답변 + 출처 반환. 일일 요청 한도(50회) 및 `user_llm_usage` 누적. 인증: 쿠키 또는 Bearer. [PUSHMIND-RAG.md](./PUSHMIND-RAG.md) 참고.
 
 **결제(Plan) 요약**: 주문 생성 → 결제창(나이스페이 JS SDK) → returnUrl POST 시 승인 API 호출 → `users`·`payments`·`notifications` 갱신. 이후 Plan 청구 내역에서 승인 24시간 이내 건은 `/api/payment/cancel`로 취소 가능하며, 성공 시 `payments.status='cancelled'` 반영 + `payment_cancelled` 알림이 생성됩니다. 또한 나이스페이 웹훅의 취소 이벤트(API/관리자 취소)에서도 동일한 취소 반영/알림이 수행됩니다. 만료일 지나면 check-expiry로 `plan = 'free'` 전환. 흐름·DB 변화·한도·환경 변수 상세는 [PLAN.md](./PLAN.md) 참고.
 
@@ -64,7 +66,8 @@ Vercel
 | `NICE_PAY_MERCHANT_KEY` | 선택 | 레거시 승인·**취소 API 서명**용 가맹점키 | return: 미설정 시 v1 API만 사용. **취소**: cancel_process.jsp의 SignData에 사용(미설정 시 secretKey로 시도, A301/가맹점키 조회 오류 시 설정 필요). 서버 전용 |
 | `NICE_PAY_CANCEL_API_URL` | 선택 | 나이스페이 취소 API URL | 미설정 시 실결제는 `dc1-api.nicepay.co.kr`, 테스트는 `{NICE_PAY_API_BASE}/webapi/cancel_process.jsp` |
 | `NEXT_PUBLIC_NICE_PAY_SDK_URL` | 선택 | 결제창 JS 스크립트 URL | 미설정 시 테스트(sandbox) 사용 |
-| `SUPABASE_SERVICE_ROLE_KEY` | ✅ (결제 사용 시) | Supabase 서비스 롤 키 | return URL·웹훅에서 결제·알림 DB 갱신 시 필요. **서버 전용, 노출 금지** |
+| `SUPABASE_SERVICE_ROLE_KEY` | ✅ (결제/PushMind 사용 시) | Supabase 서비스 롤 키 | return URL·웹훅에서 결제·알림 DB 갱신, PushMind embedding 쓰기 시 필요. **서버 전용, 노출 금지** |
+| `OPENAI_API_KEY` | ✅ (PushMind 사용 시) | OpenAI API 키 | PushMind RAG embedding·챗 API 호출. **서버 전용, 노출 금지** |
 | `NEXT_PUBLIC_GOOGLE_CLIENT_ID` | 선택 | Google OAuth 웹 클라이언트 ID(앱 1개당 1개) | 커밋푸시 "구글 드라이브에서 선택" 시 Drive API(앱 내 피커)용. 사용자별 값이 아님. 각 사용자는 자기 Google 계정으로 로그인해 자기 Drive에서만 선택·링크 저장(파일 업로드 없음). **배포 환경 사용 시** 아래 "Google Drive 연동(배포)" 참고. |
 | `NEXT_PUBLIC_GOOGLE_APP_ID` | 선택 | Google Cloud 프로젝트 번호 | 없어도 동작할 수 있음. |
 

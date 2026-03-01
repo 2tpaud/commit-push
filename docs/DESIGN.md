@@ -64,7 +64,7 @@
 ### 홈 화면 (로그인 후)
 - **위치**: `app/(dashboard)/page.tsx`
 - **노출**: 로그인 후 path `/`일 때 (비로그인 시 `/`는 랜딩 페이지).
-- SharedAppLayout 내부: **활동 그래프(ContributionGraph)** 한 개만 표시. 연도별·노트/커밋 활동 히트맵, 호버 시 툴팁(날짜·활동 횟수). 로딩 중에는 Skeleton 표시. **연도별 캐시**(`activityCache`)와 레이아웃 **프리페치**로 같은 연도 재진입 시 로딩 거의 없음. **커밋푸시**·**새 노트 생성**·**알림**은 헤더 우측의 아이콘(MessageCircleMore, FilePlus, Bell)으로 제공되며, 클릭 시 SharedAppLayout에서 렌더하는 NewNoteDialog / CommitPushDialog 또는 알림 드롭다운이 열림.
+- SharedAppLayout 내부: **활동 그래프(ContributionGraph)** 한 개만 표시. 연도별·노트/커밋 활동 히트맵, 호버 시 툴팁(날짜·활동 횟수). 로딩 중에는 Skeleton 표시. **연도별 캐시**(`activityCache`)와 레이아웃 **프리페치**로 같은 연도 재진입 시 로딩 거의 없음. **커밋푸시**·**새 노트 생성**·**알림**은 헤더 우측의 아이콘(MessageCircleMore, FilePlus, Bell)으로 제공되며, 클릭 시 SharedAppLayout에서 렌더하는 NewNoteDialog / CommitPushDialog 또는 알림 드롭다운이 열림. **PushMind**: 우측 하단 고정 플로팅 버튼(MessageSquare). 클릭 시 우측 시트 채팅 패널. 패널 열 때마다 자동 동기화(embed), 대화는 SharedAppLayout state로 페이지 이동 시에도 유지. 질문 → 답변 + 참고한 출처(노트/커밋 링크·질문과의 관련도). [PUSHMIND-RAG.md](./PUSHMIND-RAG.md) 참고.
 
 ### 요금제 페이지 (`/plan`)
 - **위치**: `app/(dashboard)/plan/page.tsx`

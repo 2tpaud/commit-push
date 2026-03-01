@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useMemo } from 'react'
-import { useParams, useSearchParams } from 'next/navigation'
+import { useParams, useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabaseClient'
 import { useAuthUser } from '@/components/AuthUserProvider'
@@ -116,9 +116,11 @@ function formatStatus(status: string | null): string {
 export default function NoteDetailPage() {
   const params = useParams()
   const searchParams = useSearchParams()
+  const router = useRouter()
   const rawId = params?.id
   const noteId = (typeof rawId === 'string' ? rawId : rawId?.[0] ?? '') || ''
   const fromNoteId = searchParams?.get('from') ?? null
+  const openCommitId = searchParams?.get('openCommit') ?? null
 
   const user = useAuthUser()
   const { isOpen, openSheet, closeSheet, currentNoteId, setCurrentNoteId } = useCommitSheet()
@@ -131,6 +133,7 @@ export default function NoteDetailPage() {
   const [copied, setCopied] = useState(false)
   const [userPlan, setUserPlan] = useState<string | null>(null)
   const [proRequiredOpen, setProRequiredOpen] = useState(false)
+  const [highlightedCommitId, setHighlightedCommitId] = useState<string | null>(null)
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -147,6 +150,13 @@ export default function NoteDetailPage() {
   useEffect(() => {
     setCurrentNoteId(noteId)
   }, [noteId, setCurrentNoteId])
+
+  useEffect(() => {
+    if (openCommitId && noteId) {
+      openSheet()
+      setHighlightedCommitId(openCommitId)
+    }
+  }, [openCommitId, noteId, openSheet])
 
   useEffect(() => {
     if (!user?.id) return
@@ -307,6 +317,30 @@ export default function NoteDetailPage() {
     return sorted
   }, [commits, sortOrder])
 
+  useEffect(() => {
+    if (!isOpen || !highlightedCommitId || !sortedCommits.some((c) => c.id === highlightedCommitId)) return
+    const el = document.getElementById(`commit-${highlightedCommitId}`)
+    if (el) {
+      const t = setTimeout(() => {
+        el.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+      }, 100)
+      return () => clearTimeout(t)
+    }
+  }, [isOpen, highlightedCommitId, sortedCommits])
+
+  useEffect(() => {
+    if (!highlightedCommitId) return
+    const t = setTimeout(() => {
+      setHighlightedCommitId(null)
+      if (openCommitId && typeof window !== 'undefined') {
+        const url = new URL(window.location.href)
+        url.searchParams.delete('openCommit')
+        router.replace(url.pathname + url.search, { scroll: false })
+      }
+    }, 1000)
+    return () => clearTimeout(t)
+  }, [highlightedCommitId, openCommitId, router])
+
   if (!note) {
     return (
       <div 
@@ -437,7 +471,12 @@ export default function NoteDetailPage() {
                   sortedCommits.map((commit) => (
                     <div
                       key={commit.id}
-                      className="rounded-lg border border-border bg-card p-4"
+                      id={`commit-${commit.id}`}
+                      className={`rounded-lg border p-4 transition-all duration-300 ${
+                        highlightedCommitId === commit.id
+                          ? 'border-[#1F2A44] bg-[#1F2A44]/10 ring-2 ring-[#1F2A44] ring-offset-2 shadow-md'
+                          : 'border-border bg-card'
+                      }`}
                     >
                       <div className="mb-2 flex items-start justify-between gap-3">
                         <div className="flex flex-col gap-1">

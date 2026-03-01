@@ -63,6 +63,7 @@ const DOC_TABS = [
   { value: 'design', label: '디자인' },
   { value: 'plan', label: '플랜' },
   { value: 'payment-test-checklist', label: '결제 테스트' },
+  { value: 'pushmind-rag', label: 'PushMind' },
 ] as const
 
 const markdownProseClass =

@@ -9,6 +9,7 @@ const ALLOWED_SLUGS: Record<string, string> = {
   plan: 'PLAN.md',
   product: 'PRODUCT.md',
   'payment-test-checklist': 'PAYMENT-TEST-CHECKLIST.md',
+  'pushmind-rag': 'PUSHMIND-RAG.md',
 }
 
 export async function GET(
