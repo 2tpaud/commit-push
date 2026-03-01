@@ -130,7 +130,7 @@ API 컴포넌트:
 - `app/api/plan/check-expiry/route.ts`: 쿠키 + Bearer 이중 인증, 만료 전환 + 만료 임박 알림(`D-3`, `D-1`) 생성
 
 **결제 return**
-- `app/api/payment/return/route.ts`: 세션 미사용, 서비스 롤로 `order_id` 기준 조회·승인·갱신. **NICE_PAY_MERCHANT_KEY 없으면** v1 API(Basic 인증), **있으면** 레거시 pay_process.jsp 승인. 나이스페이 401 시 `nicepay_auth` 반환.
+- `app/api/payment/return/route.ts`: 세션 미사용, 서비스 롤로 `order_id` 기준 조회·승인·갱신. **NICE_PAY_MERCHANT_KEY 없으면** v1 API(Basic 인증, 시크릿 키 **Basic 인증** 타입 권장), **있으면** 레거시 pay_process.jsp(AuthToken+SignData(가맹점키), Basic 헤더 없음; 가맹점이 레거시로 설정된 경우 시크릿 키는 **Token 인증** 타입인 경우 많음). 나이스페이 401 시 `nicepay_auth` 반환.
 
 **알림 API**
 - `app/api/notifications/route.ts`, `app/api/notifications/[id]/read/route.ts`: 쿠키 세션 없으면 `Authorization: Bearer`로 인증(결제 return 후 알림 표시용). `SharedAppLayout`: `useAuthSession()`으로 토큰 전달해 조회·읽음 처리.
