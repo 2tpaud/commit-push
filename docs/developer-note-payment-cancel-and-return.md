@@ -77,6 +77,11 @@
 - **401**: 배포 환경에서 쿠키 미전달 시 Bearer fallback 추가(notifications·check-expiry와 동일).
 - **404**: 실결제 시 `api.nicepay.co.kr/webapi/cancel_process.jsp`는 404. `dc1-api.nicepay.co.kr/webapi/cancel_process.jsp` 사용.
 
+**취소 시 "가맹점키 조회 오류" (A301)**
+- **배경**: 취소는 **레거시** API(`cancel_process.jsp`)만 있으며, 서명 공식이 **SignData = sha256(MID + CancelAmt + EdiDate + MerchantKey)** 로 **가맹점키(MerchantKey)** 를 씀. 승인은 v1 API로 가맹점키 없이 동작하지만, 취소는 이 레거시 전용이라 가맹점키가 필요할 수 있음.
+- **구현**: `NICE_PAY_MERCHANT_KEY`가 있으면 취소 서명에 사용, 없으면 `NICE_PAY_SECRET_KEY`로 시도. A301 또는 응답 메시지에 "가맹점키"/"상점키" 포함 시 `hint`로 가맹점키 발급·환경변수 설정 안내 반환.
+- **조치**: 나이스페이에 가맹점키(상점키) 발급 요청 후 `NICE_PAY_MERCHANT_KEY`에 설정.
+
 **결제 후 알림창에 알림이 안 뜨는 문제**
 - **배경**: 결제 return으로 `/plan` 복귀 시 쿠키 미전달로 `GET /api/notifications` 401 → 알림 목록 빈 배열, 벨 클릭 시 "알림이 없습니다"만 표시.
 - **구현**: `/api/notifications` GET·PATCH `/api/notifications/[id]/read`에 쿠키 없을 때 **Bearer fallback** 추가. `SharedAppLayout`에서 `useAuthSession()`으로 토큰 넘겨 알림 조회·읽음 처리 시 Bearer 헤더 전달.
@@ -108,7 +113,7 @@ API 컴포넌트:
 
 **취소 API**
 - `app/api/payment/cancel/route.ts` 추가
-- 인증: 쿠키 세션 우선, 없으면 Bearer(배포 환경 401 대비). 취소 가능 조건/권한/기간 체크 + PG 취소 호출 + DB 반영 + 취소 알림 생성. 실결제 시 취소 URL은 dc1-api.nicepay.co.kr(api.nicepay.co.kr은 404).
+- 인증: 쿠키 세션 우선, 없으면 Bearer(배포 환경 401 대비). 취소 가능 조건/권한/기간 체크 + PG 취소 호출 + DB 반영 + 취소 알림 생성. 실결제 시 취소 URL은 dc1-api.nicepay.co.kr(api.nicepay.co.kr은 404). **서명**: SignData에 `NICE_PAY_MERCHANT_KEY` 사용(없으면 secretKey). A301/가맹점키 오류 시 응답에 hint로 가맹점키 설정 안내.
 
 **웹훅**
 - `app/api/payment/webhook/route.ts`에 취소 이벤트 분기 추가

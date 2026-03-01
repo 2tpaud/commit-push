@@ -7,6 +7,8 @@ const NICEPAY_API_BASE = process.env.NICE_PAY_API_BASE ?? 'https://sandbox-api.n
 const NICEPAY_CANCEL_API_URL = process.env.NICE_PAY_CANCEL_API_URL
 const clientId = process.env.NEXT_PUBLIC_NICE_PAY_CLIENT_ID
 const secretKey = process.env.NICE_PAY_SECRET_KEY
+/** 취소 API(cancel_process.jsp) 서명용. 없으면 secretKey 사용(테스트/일부 환경). 실결제에서 '가맹점키 조회 오류' 시 나이스페이에서 가맹점키 발급 후 설정. */
+const merchantKey = process.env.NICE_PAY_MERCHANT_KEY ?? secretKey
 const mid = process.env.NICE_PAY_MID ?? process.env.NEXT_PUBLIC_NICE_PAY_CLIENT_ID
 
 type CancelBody = {
@@ -98,7 +100,8 @@ export async function POST(request: Request) {
 
   const ediDate = getEdiDate()
   const cancelAmt = String(payment.amount)
-  const signData = crypto.createHash('sha256').update(`${mid}${cancelAmt}${ediDate}${secretKey}`, 'utf8').digest('hex')
+  // cancel_process.jsp 서명: SignData = sha256(MID + CancelAmt + EdiDate + MerchantKey). 가맹점키 없으면 secretKey로 시도.
+  const signData = crypto.createHash('sha256').update(`${mid}${cancelAmt}${ediDate}${merchantKey}`, 'utf8').digest('hex')
   const cancelUrl =
     NICEPAY_CANCEL_API_URL ??
     (NICEPAY_API_BASE.includes('api.nicepay.co.kr')
@@ -136,6 +139,7 @@ export async function POST(request: Request) {
   }
 
   const code = String(payload.ResultCode ?? payload.resultCode ?? payload.resultCd ?? '')
+  const resultMsg = String(payload.ResultMsg ?? payload.resultMsg ?? payload.resultCd ?? '결제 취소에 실패했습니다.')
   const ok = code === '2001' || code === '0000'
   if (!ok) {
     console.error('[payment/cancel] pg_cancel_failed', {
@@ -145,10 +149,14 @@ export async function POST(request: Request) {
       resStatus: cancelRes.status,
       payload,
     })
+    const isMerchantKeyError = code === 'A301' || /가맹점키|상점키/.test(resultMsg)
     return NextResponse.json(
       {
         error: 'cancel_failed',
-        resultMsg: String(payload.ResultMsg ?? payload.resultMsg ?? payload.resultCd ?? '결제 취소에 실패했습니다.'),
+        resultMsg,
+        ...(isMerchantKeyError && {
+          hint: '취소 API는 레거시(cancel_process.jsp) 전용이라 서명에 가맹점키(MerchantKey)가 필요합니다. 나이스페이에서 가맹점키를 발급받아 NICE_PAY_MERCHANT_KEY 환경변수로 설정하세요.',
+        }),
         pgResult: payload,
       },
       { status: 400 }
