@@ -140,6 +140,9 @@ declare global {
         amount: number
         goodsName: string
         returnUrl: string
+        buyerName?: string
+        buyerEmail?: string
+        buyerTel?: string
         vbankHolder?: string
         fnError?: (r: { errorMsg?: string }) => void
       }) => void
@@ -338,6 +341,8 @@ export default function PlanPage() {
           orderId?: string
           amount?: number
           goodsName?: string
+          buyerName?: string
+          buyerEmail?: string
         }
         if (!res.ok) {
           const msg = res.status === 401
@@ -346,7 +351,7 @@ export default function PlanPage() {
           setMessage({ type: 'error', text: msg })
           return
         }
-        const { orderId, amount, goodsName } = data
+        const { orderId, amount, goodsName, buyerName, buyerEmail } = data
         if (orderId == null || amount == null || goodsName == null) {
           setMessage({ type: 'error', text: '주문 정보를 받지 못했습니다.' })
           return
@@ -365,6 +370,8 @@ export default function PlanPage() {
           amount,
           goodsName,
           returnUrl,
+          ...(buyerName && { buyerName }),
+          ...(buyerEmail && { buyerEmail }),
           ...(method === 'vbank' && { vbankHolder: 'CommitPush' }),
           fnError(result) {
             paymentStartedAtRef.current = null

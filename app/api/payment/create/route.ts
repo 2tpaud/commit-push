@@ -41,8 +41,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
+  const { data: profile } = await supabase
+    .from('users')
+    .select('full_name')
+    .eq('id', user.id)
+    .single()
+
   const { amount, goodsName } = getAmountAndGoodsName(plan, billingCycle)
   const orderId = crypto.randomUUID()
+  const buyerName = (profile?.full_name ?? '').trim().slice(0, 30)
+  const buyerEmail = (user.email ?? '').trim().slice(0, 60)
 
   let error = (await supabase.from('payments').insert({
     order_id: orderId,
@@ -74,5 +82,7 @@ export async function POST(request: Request) {
     orderId,
     amount,
     goodsName,
+    buyerName: buyerName || undefined,
+    buyerEmail: buyerEmail || undefined,
   })
 }
