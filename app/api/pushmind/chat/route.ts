@@ -10,7 +10,7 @@
  */
 
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { createServerSupabase } from '@/lib/supabaseServer'
 import { getEmbedding, searchSimilar, type MatchRow } from '@/lib/pushmind'
 import OpenAI from 'openai'
@@ -73,7 +73,7 @@ type UserLlmUsageRow = {
 }
 
 async function upsertUsage(
-  supabase: ReturnType<typeof createClient>,
+  supabase: SupabaseClient,
   userId: string,
   inputTokens: number,
   outputTokens: number
@@ -93,11 +93,11 @@ async function upsertUsage(
       input_tokens: (existing.input_tokens ?? 0) + inputTokens,
       output_tokens: (existing.output_tokens ?? 0) + outputTokens,
     }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- user_llm_usage 테이블 타입 미정의 시 빌드 오류 회피
-    await supabase.from('user_llm_usage').update(payload as any).eq('id', existing.id)
+    // @ts-expect-error -- Supabase 클라이언트에 user_llm_usage 타입 미정의 시 update 인자가 never로 추론됨
+    await supabase.from('user_llm_usage').update(payload).eq('id', existing.id)
   } else {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- user_llm_usage 테이블 타입 미정의 시 빌드 오류 회피
-    await supabase.from('user_llm_usage').insert({ user_id: userId, date: today, request_count: 1, input_tokens: inputTokens, output_tokens: outputTokens } as any)
+    // @ts-expect-error -- Supabase 클라이언트에 user_llm_usage 타입 미정의 시 insert 인자가 never로 추론됨
+    await supabase.from('user_llm_usage').insert({ user_id: userId, date: today, request_count: 1, input_tokens: inputTokens, output_tokens: outputTokens })
   }
 }
 
