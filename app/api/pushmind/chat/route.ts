@@ -93,10 +93,10 @@ async function upsertUsage(
       input_tokens: (existing.input_tokens ?? 0) + inputTokens,
       output_tokens: (existing.output_tokens ?? 0) + outputTokens,
     }
-    // @ts-expect-error -- Supabase 클라이언트에 user_llm_usage 타입 미정의 시 update 인자가 never로 추론됨
+    // @ts-ignore -- Supabase user_llm_usage 테이블 타입 미정의 시 로컬/배포 환경별 never 추론 차이 대응
     await supabase.from('user_llm_usage').update(payload).eq('id', existing.id)
   } else {
-    // @ts-expect-error -- Supabase 클라이언트에 user_llm_usage 타입 미정의 시 insert 인자가 never로 추론됨
+    // @ts-ignore -- Supabase user_llm_usage 테이블 타입 미정의 시 로컬/배포 환경별 never 추론 차이 대응
     await supabase.from('user_llm_usage').insert({ user_id: userId, date: today, request_count: 1, input_tokens: inputTokens, output_tokens: outputTokens })
   }
 }
