@@ -93,20 +93,11 @@ async function upsertUsage(
       input_tokens: (existing.input_tokens ?? 0) + inputTokens,
       output_tokens: (existing.output_tokens ?? 0) + outputTokens,
     }
-    await supabase
-      .from('user_llm_usage')
-      .update(payload as Record<string, unknown>)
-      .eq('id', existing.id)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- user_llm_usage 테이블 타입 미정의 시 빌드 오류 회피
+    await supabase.from('user_llm_usage').update(payload as any).eq('id', existing.id)
   } else {
-    await supabase
-      .from('user_llm_usage')
-      .insert({
-        user_id: userId,
-        date: today,
-        request_count: 1,
-        input_tokens: inputTokens,
-        output_tokens: outputTokens,
-      } as Record<string, unknown>)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- user_llm_usage 테이블 타입 미정의 시 빌드 오류 회피
+    await supabase.from('user_llm_usage').insert({ user_id: userId, date: today, request_count: 1, input_tokens: inputTokens, output_tokens: outputTokens } as any)
   }
 }
 
