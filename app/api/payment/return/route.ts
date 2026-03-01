@@ -237,12 +237,23 @@ export async function POST(request: Request) {
     }
   }
 
-  const expiresAt = new Date()
   const isAnnual =
     (payment as { billing_cycle?: string })?.billing_cycle === 'annual' ||
     payment.amount === 48000 ||
     payment.amount === 67200
-  expiresAt.setMonth(expiresAt.getMonth() + (isAnnual ? 12 : 1))
+  const addMonths = isAnnual ? 12 : 1
+
+  const { data: userRow } = await supabase
+    .from('users')
+    .select('plan, plan_expires_at')
+    .eq('id', payment.user_id)
+    .single()
+  const currentExpires = userRow?.plan_expires_at ? new Date(userRow.plan_expires_at) : null
+  const isSamePlan = userRow?.plan === payment.plan
+  const hasFutureExpiry = currentExpires != null && !Number.isNaN(currentExpires.getTime()) && currentExpires.getTime() > Date.now()
+  const baseDate = isSamePlan && hasFutureExpiry ? currentExpires : new Date()
+  const expiresAt = new Date(baseDate)
+  expiresAt.setMonth(expiresAt.getMonth() + addMonths)
 
   const { error: updateUserError } = await supabase
     .from('users')

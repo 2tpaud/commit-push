@@ -71,7 +71,7 @@ function UsageGaugesInMenu({ profile }: { profile: UserProfile }) {
         </Badge>
         {isPaidPlan && expiresAtValid ? (
           <span className="text-xs text-muted-foreground">
-            {expiresAt!.toLocaleDateString('ko-KR')} (D-{dDay}일)
+            ~{expiresAt!.toLocaleDateString('ko-KR')} (D-{dDay}일)
           </span>
         ) : null}
       </div>

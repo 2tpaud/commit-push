@@ -273,7 +273,7 @@ export default function PlanPage() {
   }, [])
 
   const doPaymentWithMethod = useCallback(
-    async (planId: PlanId, method: NicePayMethod) => {
+    async (planId: PlanId, method: NicePayMethod, cycle: 'monthly' | 'annual') => {
       if (planId !== 'pro' && planId !== 'team') return
       if (!effectiveClientId) {
         setMessage({
@@ -334,7 +334,7 @@ export default function PlanPage() {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${session.access_token}`,
           },
-          body: JSON.stringify({ plan: planId, billingCycle }),
+          body: JSON.stringify({ plan: planId, billingCycle: cycle }),
         })
         const data = await res.json().catch(() => ({})) as {
           error?: string
@@ -385,7 +385,7 @@ export default function PlanPage() {
         setPayingPlan(null)
       }
     },
-    [effectiveClientId, billingCycle]
+    [effectiveClientId]
   )
 
   const cancelPayment = useCallback(
@@ -442,6 +442,11 @@ export default function PlanPage() {
       if (!mounted) return
       setUser(u)
       if (u) {
+        await fetch('/api/plan/check-expiry', {
+          credentials: 'include',
+          ...(session?.access_token && { headers: { Authorization: `Bearer ${session.access_token}` } }),
+        })
+        if (!mounted) return
         const { data, error } = await supabase
           .from('users')
           .select('plan, plan_expires_at, total_notes, total_commits')
@@ -501,6 +506,8 @@ export default function PlanPage() {
   const currentPlan = (profile?.plan ?? 'free') as PlanId
   const limits = PLAN_LIMITS[currentPlan] ?? PLAN_LIMITS.free
   const expiresAt = profile?.plan_expires_at ? new Date(profile.plan_expires_at) : null
+  /** 만료일 지나면 check-expiry가 plan을 free로 바꿈. 그 전까지 UI만 재결제 가능하게 표시 */
+  const isPaidPlanExpired = (currentPlan === 'pro' || currentPlan === 'team') && expiresAt != null && Date.now() > expiresAt.getTime()
   const canPay = Boolean(effectiveClientId)
 
   return (
@@ -542,7 +549,7 @@ export default function PlanPage() {
                 <Badge variant="outline">{PLAN_META[currentPlan]?.name ?? currentPlan}</Badge>
                 {expiresAt && (
                   <span className="text-xs text-muted-foreground">
-                    만료: {expiresAt.toLocaleDateString('ko-KR')}
+                    만료일: {expiresAt.toLocaleDateString('ko-KR')}
                   </span>
                 )}
               </div>
@@ -584,46 +591,44 @@ export default function PlanPage() {
               ) : (
                 <Table>
                   <TableHeader>
-                    <TableRow>
+                    <TableRow className="text-xs">
                       <TableHead className="text-[#1F2A44]">승인일</TableHead>
                       <TableHead className="text-[#1F2A44]">금액</TableHead>
                       <TableHead className="text-[#1F2A44]">플랜</TableHead>
                       <TableHead className="text-[#1F2A44]">상태</TableHead>
-                      <TableHead className="text-right text-[#1F2A44]">동작</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {payments.map((row) => (
                       <TableRow key={row.id}>
-                        <TableCell>
-                          {row.paid_at
-                            ? new Date(row.paid_at).toLocaleString('ko-KR', {
-                                year: 'numeric',
-                                month: '2-digit',
-                                day: '2-digit',
-                                hour: '2-digit',
-                                minute: '2-digit',
-                              })
-                            : '-'}
+                        <TableCell className="text-xs">
+                          {row.paid_at ? (
+                            <>
+                              <span className="block">{new Date(row.paid_at).toLocaleDateString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit' })}</span>
+                              <span className="block text-muted-foreground">{new Date(row.paid_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}</span>
+                            </>
+                          ) : '-'}
                         </TableCell>
-                        <TableCell className="tabular-nums">
+                        <TableCell className="whitespace-nowrap tabular-nums text-xs">
                           {row.amount != null ? `${Number(row.amount).toLocaleString('ko-KR')}원` : '-'}
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="whitespace-nowrap text-xs">
                           {PLAN_META[row.plan as PlanId]?.name ?? row.plan}
                         </TableCell>
-                        <TableCell>{getPaymentStatusLabel(row.status)}</TableCell>
-                        <TableCell className="text-right">
-                          {isCancelableWithin24Hours(row) && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              disabled={cancellingPaymentId === row.id}
-                              onClick={() => cancelPayment(row)}
-                            >
-                              {cancellingPaymentId === row.id ? '취소 처리 중…' : '결제취소'}
-                            </Button>
-                          )}
+                        <TableCell className="text-xs">
+                          <div className="flex items-center gap-4">
+                            <span className="shrink-0 whitespace-nowrap">{getPaymentStatusLabel(row.status)}</span>
+                            {isCancelableWithin24Hours(row) && (
+                              <button
+                                type="button"
+                                disabled={cancellingPaymentId === row.id}
+                                onClick={() => cancelPayment(row)}
+                                className="shrink-0 inline-flex items-center rounded-md border border-input bg-background px-2.5 py-0.5 text-xs font-semibold text-foreground transition-colors hover:bg-gray-100 hover:text-foreground disabled:pointer-events-none disabled:opacity-50 dark:hover:bg-gray-800"
+                              >
+                                {cancellingPaymentId === row.id ? '취소 처리 중…' : '결제취소'}
+                              </button>
+                            )}
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -648,21 +653,29 @@ export default function PlanPage() {
         {(Object.keys(PLAN_META) as PlanId[]).map((planId) => {
           const meta = PLAN_META[planId]
           const isCurrent = currentPlan === planId
+          const isFreeCardNoAction = planId === 'free' && (currentPlan === 'pro' || currentPlan === 'team')
           const isSelected = (selectedPlanId ?? currentPlan) === planId
+          const handleCardClick = () => {
+            if (isFreeCardNoAction) return
+            setSelectedPlanId(planId)
+          }
+          const isPaidCard = planId === 'pro' || planId === 'team'
+          const showSubscribeCancel = isCurrent && isPaidCard && !isPaidPlanExpired && billingCycle === 'monthly'
+          const showPayButton = !isCurrent || isPaidPlanExpired || (isCurrent && isPaidCard && billingCycle === 'annual')
           return (
             <div
               key={planId}
               role="button"
-              tabIndex={0}
-              onClick={() => setSelectedPlanId(planId)}
-              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedPlanId(planId) } }}
-              className={`cursor-default rounded-lg border bg-card p-6 shadow-sm transition-shadow hover:shadow-md ${
-                isSelected ? 'ring-2 ring-[#1F2A44]' : ''
-              }`}
+              tabIndex={isFreeCardNoAction ? -1 : 0}
+              onClick={handleCardClick}
+              onKeyDown={(e) => { if (!isFreeCardNoAction && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); setSelectedPlanId(planId) } }}
+              className={`rounded-lg border bg-card p-6 shadow-sm transition-shadow ${
+                isFreeCardNoAction ? 'cursor-default opacity-75' : 'cursor-default hover:shadow-md'
+              } ${isSelected ? 'ring-2 ring-[#1F2A44]' : ''}`}
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-[#1F2A44]">{meta.icon}<span className="font-semibold">{meta.name}</span></div>
-                {isCurrent && <Badge variant="outline">현재 플랜</Badge>}
+                {isCurrent && !isPaidPlanExpired && <Badge variant="outline">현재 플랜</Badge>}
               </div>
               <p className="mt-2 text-2xl font-semibold text-foreground">{formatPrice(planId, billingCycle)}</p>
               <p className="mt-1 text-sm text-muted-foreground">{meta.description}</p>
@@ -674,36 +687,32 @@ export default function PlanPage() {
                   </li>
                 ))}
               </ul>
-              <div className="mt-6">
-                {isCurrent ? (
-                  (planId === 'pro' || planId === 'team') ? (
+              {planId !== 'free' ? (
+                <div className="mt-6">
+                  {showSubscribeCancel ? (
                     <Button
                       variant="outline"
-                      className="w-full"
-                      onClick={() => setCancelPlanDialogOpen(true)}
+                      className="w-full hover:bg-gray-100 dark:hover:bg-gray-800"
+                      onClick={(e) => { e.stopPropagation(); setCancelPlanDialogOpen(true) }}
                     >
                       구독 취소
                     </Button>
+                  ) : showPayButton ? (
+                    <Button
+                      variant="outline"
+                      className="w-full hover:bg-gray-100 dark:hover:bg-gray-800"
+                      disabled={!canPay || payingPlan !== null}
+                      onClick={(e) => { e.stopPropagation(); doPaymentWithMethod(planId, 'cardAndEasyPay', billingCycle) }}
+                    >
+                      {payingPlan === planId ? '결제창 열기 중…' : '결제하기'}
+                    </Button>
                   ) : (
                     <Button variant="outline" className="w-full" disabled>
-                      사용 중
+                      현재 플랜
                     </Button>
-                  )
-                ) : (planId === 'pro' || planId === 'team') ? (
-                  <Button
-                    variant="outline"
-                    className="w-full hover:bg-gray-100 dark:hover:bg-gray-800"
-                    disabled={!canPay || payingPlan !== null}
-                    onClick={() => doPaymentWithMethod(planId, 'cardAndEasyPay')}
-                  >
-                    {payingPlan === planId ? '결제창 열기 중…' : '결제하기'}
-                  </Button>
-                ) : (
-                  <Button variant="outline" className="w-full" disabled>
-                    현재 플랜
-                  </Button>
-                )}
-              </div>
+                  )}
+                </div>
+              ) : null}
             </div>
           )
         })}

@@ -102,7 +102,7 @@ comment on column public.users.plan is
 'SaaS 요금제 구분. free / pro / team 등 확장 대비.';
 
 comment on column public.users.plan_expires_at is
-'유료 플랜 만료 시점. 구독 관리용.';
+'유료 플랜 만료 시점. 구독 관리용. 결제 승인 시: 첫 구독·만료 후 = 결제일+기간, 동일 플랜·만료일 미래 = 기존 만료일+기간(PLAN.md 참고).';
 
 comment on column public.users.total_notes is
 '사용자가 생성한 총 노트 수. 성능 최적화를 위한 캐시 필드. notes INSERT/DELETE 시 트리거로 갱신됨.';
