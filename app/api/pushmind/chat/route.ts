@@ -65,6 +65,13 @@ function buildContext(matches: MatchRow[]): string {
     .join('\n\n')
 }
 
+type UserLlmUsageRow = {
+  id: string
+  request_count: number | null
+  input_tokens: number | null
+  output_tokens: number | null
+}
+
 async function upsertUsage(
   supabase: ReturnType<typeof createClient>,
   userId: string,
@@ -72,16 +79,17 @@ async function upsertUsage(
   outputTokens: number
 ) {
   const today = new Date().toISOString().slice(0, 10)
-  const { data: existing } = await supabase
+  const { data } = await supabase
     .from('user_llm_usage')
     .select('id, request_count, input_tokens, output_tokens')
     .eq('user_id', userId)
     .eq('date', today)
     .single()
 
+  const existing = data as UserLlmUsageRow | null
   if (existing) {
     const payload = {
-      request_count: existing.request_count + 1,
+      request_count: (existing.request_count ?? 0) + 1,
       input_tokens: (existing.input_tokens ?? 0) + inputTokens,
       output_tokens: (existing.output_tokens ?? 0) + outputTokens,
     }
