@@ -27,7 +27,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Check, CreditCard, Zap, Users } from 'lucide-react'
-import { PLAN_LIMITS, type PlanId } from '@/lib/planLimits'
+import { PLAN_LIMITS, PUSHMIND_DAILY_LIMIT, type PlanId } from '@/lib/planLimits'
 
 const NICE_PAY_SDK_URL =
   typeof process.env.NEXT_PUBLIC_NICE_PAY_SDK_URL !== 'undefined'
@@ -42,6 +42,7 @@ interface UserProfile {
   plan_expires_at: string | null
   total_notes: number
   total_commits: number
+  pushmind_request_count: number
 }
 
 interface PaymentRow {
@@ -181,12 +182,21 @@ export default function PlanPage() {
       .select('plan, plan_expires_at, total_notes, total_commits')
       .eq('id', user.id)
       .single()
+    const today = new Date().toISOString().slice(0, 10)
+    const { data: usageRow } = await supabase
+      .from('user_llm_usage')
+      .select('request_count')
+      .eq('user_id', user.id)
+      .eq('date', today)
+      .maybeSingle()
+    const pushmind_request_count = usageRow?.request_count ?? 0
     if (!error && data) {
       setProfile({
         plan: data.plan ?? 'free',
         plan_expires_at: data.plan_expires_at ?? null,
         total_notes: data.total_notes ?? 0,
         total_commits: data.total_commits ?? 0,
+        pushmind_request_count,
       })
     }
   }, [user])
@@ -455,12 +465,21 @@ export default function PlanPage() {
           .select('plan, plan_expires_at, total_notes, total_commits')
           .eq('id', u.id)
           .single()
+        const today = new Date().toISOString().slice(0, 10)
+        const { data: usageRow } = await supabase
+          .from('user_llm_usage')
+          .select('request_count')
+          .eq('user_id', u.id)
+          .eq('date', today)
+          .maybeSingle()
+        const pushmind_request_count = usageRow?.request_count ?? 0
         if (mounted && !error && data) {
           setProfile({
             plan: data.plan ?? 'free',
             plan_expires_at: data.plan_expires_at ?? null,
             total_notes: data.total_notes ?? 0,
             total_commits: data.total_commits ?? 0,
+            pushmind_request_count,
           })
         } else if (mounted) {
           setProfile({
@@ -468,6 +487,7 @@ export default function PlanPage() {
             plan_expires_at: null,
             total_notes: 0,
             total_commits: 0,
+            pushmind_request_count,
           })
         }
         if (mounted && u) {
@@ -579,6 +599,18 @@ export default function PlanPage() {
                   <div
                     className="h-full rounded-full bg-[#1F2A44] transition-all"
                     style={{ width: `${Math.min(100, ((profile?.total_commits ?? 0) / limits.maxCommits) * 100)}%` }}
+                  />
+                </div>
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">PushMind</span>
+                  <span className="font-medium tabular-nums">{profile?.pushmind_request_count ?? 0} / {PUSHMIND_DAILY_LIMIT}</span>
+                </div>
+                <div className="h-2.5 w-full rounded-full border border-border bg-muted overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-[#1F2A44] transition-all"
+                    style={{ width: `${Math.min(100, ((profile?.pushmind_request_count ?? 0) / PUSHMIND_DAILY_LIMIT) * 100)}%` }}
                   />
                 </div>
               </div>

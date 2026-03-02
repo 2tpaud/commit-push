@@ -33,7 +33,7 @@
 - **위치**: `src/components/SharedAppLayout.tsx`
 - **역할**: 로그인 후 (dashboard) 레이아웃 내 모든 페이지에서 동일한 사이드바 + 헤더 유지 (한 번만 마운트됨)
 - **구성**:
-- **헤더** (`h-14`, `border-b border-border bg-card`): SidebarTrigger, CommitPush 로고(클릭 시 홈 `/` 이동), **커밋푸시 아이콘**(MessageCircleMore), **새 노트 생성 아이콘**(FilePlus), **알림(벨) 아이콘**(Bell, 결제/만료 임박 알림 표시), **프로필 드롭다운**(아바타, 사용량 게이지, Billing 링크, 로그아웃). 아이콘·프로필 호버 시 옅은 회색 배경(`hover:bg-gray-100`), 프로필 메뉴 항목은 `cursor-default`로 손가락 커서 비표시.
+- **헤더** (`h-14`, `border-b border-border bg-card`): SidebarTrigger, CommitPush 로고(클릭 시 홈 `/` 이동), **커밋푸시 아이콘**(MessageCircleMore), **새 노트 생성 아이콘**(FilePlus), **알림(벨) 아이콘**(Bell, 결제/만료 임박 알림 표시), **프로필 드롭다운**(아바타, 노트·커밋·PushMind 일일 사용량 게이지, Billing 링크, 로그아웃). 아이콘·프로필 호버 시 옅은 회색 배경(`hover:bg-gray-100`), 프로필 메뉴 항목은 `cursor-default`로 손가락 커서 비표시.
 - **프로필 드롭다운 플랜 표시**: 사용량 게이지 상단 배지에 현재 플랜 표시. 유료 플랜(Pro/Team)은 배지 옆에 **~** 만료일(`plan_expires_at`)과 남은 일수(`D-N일`)를 함께 표기(예: ~2025.12.31 (D-30일)).
   - **메인**: 헤더는 고정, 본문만 스크롤(`scrollbar-gutter: stable` 적용). `children`으로 페이지별 콘텐츠.
 - **사용 페이지**: 홈(`/`), 작업 로그(`/activity`), 개발자 노트(`/developer-notes`), 요금제(`/plan`), 노트 상세(`/notes/[id]`), 새 노트(`/notes/new`) — 모두 `(dashboard)` 하위에서 layout이 한 번만 SharedAppLayout을 렌더
@@ -68,7 +68,7 @@
 
 ### 요금제 페이지 (`/plan`)
 - **위치**: `app/(dashboard)/plan/page.tsx`
-- **상단**: 요금제 제목 하단에 2열 그리드. 좌측 **현재 사용량** 카드(플랜, 만료일, 노트/커밋 게이지), 우측 **청구 내역** 카드(`payments`에서 `status in ('paid','cancelled')` 조회, 승인일·금액·플랜·상태 테이블, 동작 컬럼 없음). 두 카드 높이 동일(`md:items-stretch`), 청구 내역이 길면 카드 내부 스크롤. 테이블은 `text-xs`로 표시해 컨테이너 크기 유지·단락 넘김 최소화. 승인일은 날짜/시간 두 줄로 표기 가능.
+- **상단**: 요금제 제목 하단에 2열 그리드. 좌측 **현재 사용량** 카드(플랜, 만료일, 노트/커밋/PushMind 일일 사용량 게이지), 우측 **청구 내역** 카드(`payments`에서 `status in ('paid','cancelled')` 조회, 승인일·금액·플랜·상태 테이블, 동작 컬럼 없음). 두 카드 높이 동일(`md:items-stretch`), 청구 내역이 길면 카드 내부 스크롤. 테이블은 `text-xs`로 표시해 컨테이너 크기 유지·단락 넘김 최소화. 승인일은 날짜/시간 두 줄로 표기 가능.
 - **청구 내역 결제취소**: `paid`이면서 승인 후 24시간 이내 결제 건만 **상태** 셀에 **결제취소** 버튼 노출. 24시간 초과 시 버튼 미노출. 취소 성공 시 상태는 **취소완료**로 변경. 결제취소·구독 취소 버튼 호버 시 옅은 회색(`hover:bg-gray-100`, 다크 `dark:hover:bg-gray-800`).
 - **취소 알림 UX**: 결제 취소(API 취소/관리자 취소 웹훅) 반영 시 헤더 벨 알림에 결제 취소 알림(`payment_cancelled`)이 표시되며, 결제 관련 알림 클릭 시 `/plan`으로 이동.
 - **만료 임박 알림 UX**: 유료 플랜 만료 `D-3`, `D-1` 시점에 헤더 벨 알림에 `plan_expiry_3days`, `plan_expiry_1day` 알림이 표시되며, 클릭 시 `/plan`으로 이동.

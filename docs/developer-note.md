@@ -16,12 +16,15 @@
   - "마지막 수정한 노트", "가장 마지막에 커밋한 노트", "태그에 베트남이 있는 노트" 등 패턴·정규식 추가 및 태그 추출 정규식 수정(`태그에 X이/가 있는 노트`).
 - **문서 정리**
   - PUSHMIND-HYBRID.md 설계 내용를 ARCHITECTURE, DATABASE, DESIGN, PRODUCT, PUSHMIND-RAG.md로 분산 기재 후 `docs/PUSHMIND-HYBRID.md` 삭제. 코드·ARCHITECTURE·docs API에서 pushmind-hybrid 참조 제거.
+- **PushMind 일일 사용량 게이지**
+  - 프로필 드롭다운(SharedAppLayout)과 플랜 페이지의 현재 사용량 카드에 PushMind 일일 사용량(`user_llm_usage.request_count`/50) 게이지 추가. 노트·커밋과 동일한 스타일로 표시. `planLimits.ts`에 `PUSHMIND_DAILY_LIMIT` 상수 추가.
 
 ---
 
 UI·API:
 
 - **PushMindChatPanel** — Pro/Team일 때 상단 "PushMind" 옆 **Hybrid** 배지 표시(`isHybridPlan` prop). 의도 분류·구조적 쿼리는 chat API 내부에서 처리.
+- **UsageGaugesInMenu** — 프로필 드롭다운 내 노트·커밋·PushMind 일일 사용량 게이지. `fetchUserProfile`에서 `user_llm_usage` 당일 `request_count` 조회.
 - **`/api/pushmind/embed`** — 노트·커밋 select 확장(청크 확장 필드), `fetchRelatedNoteTitles()`로 연관 노트 제목 조회 후 청크에 반영.
 - **`/api/pushmind/chat`** — `classifyIntent` → semantic/structural/hybrid 분기. structural 시 `queryStructured()` 호출, null이면 `classifyIntentWithLlm()` 폴백. structural·hybrid 시 context에 구조적 결과 포함, 출처 병합.
 
@@ -34,6 +37,7 @@ UI·API:
 - **DATABASE.md** — embeddings.content_text comment 확장, "PushMind 하이브리드에서 notes/commits 활용" 절 추가.
 - **DESIGN.md** — 홈 PushMind 문단에 의미 검색/구조적 쿼리 설명 추가.
 - **PRODUCT.md** — 사용자 흐름 하단에 PushMind 하이브리드 한 줄 추가.
+- **DESIGN.md, PLAN.md, PUSHMIND-RAG.md** — 프로필 드롭다운·플랜 페이지에 PushMind 일일 사용량 게이지 반영. PUSHMIND-RAG.md §9.3 사용량 표시 추가.
 
 ---
 
@@ -46,3 +50,4 @@ UI·API:
 - `app/api/docs/[slug]/route.ts` — pushmind-hybrid slug 제거.
 - `docs/PUSHMIND-HYBRID.md` — 삭제됨.
 - **pricing 페이지** — plan 페이지와 동일한 탭(월/연)·카드 레이아웃·formatPrice·PushMind 문구. 구독/결제 버튼 없음.
+- `src/lib/planLimits.ts` — `PUSHMIND_DAILY_LIMIT`(50) 추가. 프로필·플랜 페이지 게이지 공용.

@@ -8,7 +8,7 @@ import { CreditCard, LogOut, FilePlus, MessageCircleMore, Bell, MessageSquare } 
 import { supabase } from '@/lib/supabaseClient'
 import NewNoteDialog from '@/components/NewNoteDialog'
 import CommitPushDialog from '@/components/CommitPushDialog'
-import { getLimitsForPlan } from '@/lib/planLimits'
+import { getLimitsForPlan, PUSHMIND_DAILY_LIMIT } from '@/lib/planLimits'
 import { useAuthSession } from '@/components/AuthUserProvider'
 import AppSidebar from './AppSidebar'
 import { Button } from './ui/button'
@@ -39,6 +39,7 @@ interface UserProfile {
   total_commits: number
   plan: string | null
   plan_expires_at: string | null
+  pushmind_request_count: number
 }
 
 /** 플랜명 표시용 (free -> Free, pro -> Pro, team -> Team) */
@@ -56,6 +57,7 @@ function UsageGaugesInMenu({ profile }: { profile: UserProfile }) {
   const limits = getLimitsForPlan(profile.plan)
   const notePct = Math.min(100, (profile.total_notes / limits.maxNotes) * 100)
   const commitPct = Math.min(100, (profile.total_commits / limits.maxCommits) * 100)
+  const pushmindPct = Math.min(100, ((profile.pushmind_request_count ?? 0) / PUSHMIND_DAILY_LIMIT) * 100)
   const planName = getPlanDisplayName(profile.plan)
   const isPaidPlan = profile.plan === 'pro' || profile.plan === 'team'
   const expiresAt = profile.plan_expires_at ? new Date(profile.plan_expires_at) : null
@@ -105,6 +107,20 @@ function UsageGaugesInMenu({ profile }: { profile: UserProfile }) {
             />
           </div>
         </div>
+        <div className="space-y-1">
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-muted-foreground">PushMind</span>
+            <span className="font-medium tabular-nums">
+              {profile.pushmind_request_count ?? 0} / {PUSHMIND_DAILY_LIMIT}
+            </span>
+          </div>
+          <div className="h-2.5 w-full rounded-full border border-border bg-muted overflow-hidden">
+            <div
+              className="h-full rounded-full bg-[#1F2A44] transition-all"
+              style={{ width: `${pushmindPct}%` }}
+            />
+          </div>
+        </div>
       </div>
     </div>
   )
@@ -144,8 +160,17 @@ async function fetchUserProfile(userId: string): Promise<UserProfile> {
       total_commits: 0,
       plan: 'free',
       plan_expires_at: null,
+      pushmind_request_count: 0,
     }
   }
+  const today = new Date().toISOString().slice(0, 10)
+  const { data: usageRow } = await supabase
+    .from('user_llm_usage')
+    .select('request_count')
+    .eq('user_id', userId)
+    .eq('date', today)
+    .maybeSingle()
+  const pushmind_request_count = usageRow?.request_count ?? 0
   return {
     avatar_url: data.avatar_url ?? null,
     full_name: data.full_name ?? null,
@@ -153,6 +178,7 @@ async function fetchUserProfile(userId: string): Promise<UserProfile> {
     total_commits: data.total_commits ?? 0,
     plan: data.plan ?? 'free',
     plan_expires_at: data.plan_expires_at ?? null,
+    pushmind_request_count,
   }
 }
 
