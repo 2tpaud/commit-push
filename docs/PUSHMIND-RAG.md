@@ -4,23 +4,6 @@ CommitPush 서비스 내 노트·커밋 내용을 질의할 수 있는 RAG(Retri
 
 ---
 
-## 목차
-
-1. [브랜딩 및 개념](#1-브랜딩-및-개념)  
-2. [기능 목적 및 범위](#2-기능-목적-및-범위)  
-3. [아키텍처 설계](#3-아키텍처-설계)  
-4. [RAG 구조 설계](#4-rag-구조-설계)  
-5. [DB 설계 확장 (embeddings)](#5-db-설계-확장-embeddings-테이블)  
-6. [보안 설계](#6-보안-설계)  
-7. [비용 통제 설계](#7-비용-통제-설계)  
-8. [멀티 AI 구조 설계](#8-멀티-ai-구조-설계-확장)  
-9. [프론트 UX 설계](#9-프론트-ux-설계)  
-10. [API Route 설계](#10-api-route-설계-요약)  
-11. [부족·추가 고려 사항](#11-부족추가-고려-사항-정리)  
-12. [단계별 구현 순서](#12-단계별-구현-순서-제안)
-
----
-
 ## 1. 브랜딩 및 개념
 
 ### 챗봇명
@@ -236,7 +219,14 @@ create index if not exists idx_embeddings_user_vector
 - **저장**: `user_llm_usage`(또는 `chat_usage`) 테이블에 `user_id`, `date`, `request_count`, `input_tokens`, `output_tokens` 등 누적.  
 - **판단**: API Route에서 “오늘 사용량 + 이번 요청 예상 토큰”이 한도를 넘으면 429 또는 안내 메시지 반환.
 
-**현재 구현**: 일 50회(LLM 호출 건수만), 플랜 구분 없음. chat 진입 시 `user_llm_usage.request_count` 조회 후 50 이상이면 429 + `limit_exceeded`. LLM 호출 후에만 `upsertUsage`로 count+1·토큰 누적. Free 사용자 의미 검색 안내만 반환·구조적 패턴 미매칭 안내·context 없음 안내는 집계 제외. 요청당 max_tokens 1024, 질문 2000자 상한. 토큰 일일 상한 없음.
+**현재 구현**: 일 50회는 **LLM 호출 건수**만 집계(플랜 구분 없음). chat 진입 시 `user_llm_usage.request_count`(당일) 조회 후 50 이상이면 429 + `limit_exceeded`. LLM 호출 후에만 `upsertUsage`로 count+1·토큰 누적. 요청당 max_tokens 1024, 질문 2000자 상한. 토큰 일일 상한 없음.
+
+**일일 쿼리 수 한도(50회) 상세**
+
+- **의미**: 사용자당 하루 50회까지 **LLM(Chat Completions)을 호출해 답변을 생성한 요청**만 한도에 포함된다. 즉, 채팅으로 답변을 받는 횟수가 일 50회 한도이다. 플랜(Free/Pro/Team) 구분 없이 동일.
+- **50회에 포함되는 경우**: (1) 구조적 쿼리 결과를 context로 LLM에 넘겨 답변 문장을 생성한 경우, (2) RAG 검색 결과를 context로 LLM에 넘겨 답변을 생성한 경우. 둘 다 LLM 호출 1회로 `request_count`가 1 증가한다.
+- **50회에 포함되지 않는 경우(무제한)**: LLM을 호출하지 않고 고정 안내만 반환할 때. (1) Free 사용자가 의미 검색 질문을 했을 때 Pro 플랜 안내만 반환, (2) 구조적 질문인데 패턴 미매칭으로 구조적 조회 안내만 반환, (3) context 없음으로 관련 노트/커밋 없음 안내만 반환. 이때는 `request_count`를 증가시키지 않으므로 일일 한도와 무관하게 무제한이다.
+- **적용**: chat API 진입 시 당일 `request_count` 조회, 50 이상이면 429 + limit_exceeded로 차단. LLM 호출 후에만 `upsertUsage`로 count+1·토큰 누적. `user_llm_usage`에 user_id·date·request_count·input_tokens·output_tokens 저장.
 
 ### 7.3 사용량 기록 테이블 (예시)
 
