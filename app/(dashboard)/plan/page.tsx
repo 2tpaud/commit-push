@@ -104,6 +104,7 @@ const PLAN_META: Record<
       `노트 ${PLAN_LIMITS.free.maxNotes}개`,
       `커밋 ${PLAN_LIMITS.free.maxCommits}개`,
       '기본 노트/커밋 관리',
+      'PushMind\n구조 기반 질문에 최적화된 AI',
     ],
   },
   pro: {
@@ -114,6 +115,7 @@ const PLAN_META: Record<
       `노트 ${PLAN_LIMITS.pro.maxNotes}개`,
       `커밋 ${PLAN_LIMITS.pro.maxCommits}개`,
       '노트 외부공유 가능',
+      'PushMind Hybrid\n맥락까지 이해하는 확장형 AI',
     ],
   },
   team: {
@@ -124,6 +126,7 @@ const PLAN_META: Record<
       `노트 ${PLAN_LIMITS.team.maxNotes}+`,
       `커밋 ${PLAN_LIMITS.team.maxCommits}+`,
       '팀 공동작업 가능',
+      'PushMind Hybrid\n맥락까지 이해하는 확장형 AI',
     ],
   },
 }
@@ -681,9 +684,9 @@ export default function PlanPage() {
               <p className="mt-1 text-sm text-muted-foreground">{meta.description}</p>
               <ul className="mt-4 space-y-2">
                 {meta.features.map((f, i) => (
-                  <li key={i} className="flex items-center gap-2 text-sm">
-                    <Check className="h-4 w-4 shrink-0 text-primary" />
-                    {f}
+                  <li key={i} className="flex items-start gap-2 text-sm">
+                    <Check className="h-4 w-4 shrink-0 mt-0.5 text-primary" />
+                    <span className="whitespace-pre-line">{f}</span>
                   </li>
                 ))}
               </ul>

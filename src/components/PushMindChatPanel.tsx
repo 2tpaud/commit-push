@@ -9,6 +9,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Send, FileText, MessageSquare, Info } from 'lucide-react'
@@ -39,6 +40,8 @@ interface PushMindChatPanelProps {
   /** 상위에서 전달하면 페이지 이동 시에도 대화 유지 */
   messages?: PushMindMessage[]
   setMessages?: React.Dispatch<React.SetStateAction<PushMindMessage[]>>
+  /** Pro/Team 등 하이브리드 플랜이면 true. true일 때 상단에 Hybrid 배지 표시 */
+  isHybridPlan?: boolean
 }
 
 export default function PushMindChatPanel({
@@ -46,6 +49,7 @@ export default function PushMindChatPanel({
   onOpenChange,
   messages: messagesProp,
   setMessages: setMessagesProp,
+  isHybridPlan = false,
 }: PushMindChatPanelProps) {
   const session = useAuthSession()
   const router = useRouter()
@@ -181,9 +185,12 @@ export default function PushMindChatPanel({
         aria-labelledby="pushmind-title"
       >
         <SheetHeader className="shrink-0 border-b border-border pb-3">
-          <SheetTitle id="pushmind-title" className="flex items-center gap-2 text-lg">
+          <SheetTitle id="pushmind-title" className="flex items-center gap-3 text-lg">
             <MessageSquare className="h-5 w-5 text-[#1F2A44]" aria-hidden />
-            PushMind
+            <span>PushMind</span>
+            {isHybridPlan && (
+              <Badge variant="outline">Hybrid</Badge>
+            )}
           </SheetTitle>
           <p className="text-xs text-muted-foreground font-normal mt-0.5">
             기록이 만들어낸 또 하나의 브레인

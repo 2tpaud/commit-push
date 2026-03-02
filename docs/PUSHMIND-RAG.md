@@ -58,7 +58,7 @@ CommitPush 서비스 내 노트·커밋 내용을 질의할 수 있는 RAG(Retri
 - **검색 결과 없음**: 관련 내용이 없을 때 “관련 노트/커밋을 찾지 못했어요” + 저장된 데이터 범위 안내  
 - **스트리밍 응답**: 긴 답변은 OpenAI 스트리밍으로 실시간 표시 (체감 속도·UX)  
 - **대화 이력**: 세션/탭 단위 또는 DB 저장으로 이전 질문·답변 유지 (선택)  
-- **플랜별 제한**: Free/Pro/Team에 따라 일일 쿼리 수·토큰 한도 차등 (비용 통제와 연동)
+- **플랜별 제한**: 현재는 일 50회(LLM 호출 건수) 동일. 추후 Free/Pro/Team별 일일 쿼리·토큰 차등 연동 가능.
 
 ---
 
@@ -230,11 +230,13 @@ create index if not exists idx_embeddings_user_vector
 - **Chat Completions**: `max_tokens` 상한 (예: 1024), `temperature` 고정 (예: 0.3~0.7).  
 - **Embeddings**: 요청당 토큰 제한(문서화된 제한 참고), 불필요한 재생성 최소화.
 
-### 7.2 사용량 한도
+### 7.2 사용량 한도 (현재 구현)
 
 - **일일 한도**: 사용자별(또는 플랜별) “일일 쿼리 수” 또는 “일일 토큰 합계” 상한.  
 - **저장**: `user_llm_usage`(또는 `chat_usage`) 테이블에 `user_id`, `date`, `request_count`, `input_tokens`, `output_tokens` 등 누적.  
 - **판단**: API Route에서 “오늘 사용량 + 이번 요청 예상 토큰”이 한도를 넘으면 429 또는 안내 메시지 반환.
+
+**현재 구현**: 일 50회(LLM 호출 건수만), 플랜 구분 없음. chat 진입 시 `user_llm_usage.request_count` 조회 후 50 이상이면 429 + `limit_exceeded`. LLM 호출 후에만 `upsertUsage`로 count+1·토큰 누적. Free 사용자 의미 검색 안내만 반환·구조적 패턴 미매칭 안내·context 없음 안내는 집계 제외. 요청당 max_tokens 1024, 질문 2000자 상한. 토큰 일일 상한 없음.
 
 ### 7.3 사용량 기록 테이블 (예시)
 
@@ -325,7 +327,7 @@ create table if not exists public.user_llm_usage (
 - **출처 순서**: 검색 점수 순으로 정렬해 사용자에게 동일 순서로 노출.  
 - **개인정보**: system prompt에 “사용자 개인정보를 답변에 포함하지 말 것” 등 지시 권장.  
 - **감사 로그**: (선택) 질문/답변 요약을 로그로 남겨 남용·품질 분석에 활용.  
-- **플랜 연동**: PLAN.md의 free/pro/team 한도와 연동해 일일 쿼리/토큰 상한 차등 적용.
+- **플랜 연동**: 현재 PushMind 일일 한도는 플랜 구분 없음(§7.2). 추후 PLAN.md 한도와 연동해 일일 쿼리/토큰 차등 적용 가능.
 
 ---
 
@@ -344,6 +346,8 @@ create table if not exists public.user_llm_usage (
 ## 13. 하이브리드 확장 (RAG + 구조적 쿼리)
 
 PushMind는 **의미 검색(RAG)** 과 **구조적 쿼리(DB 직접 조회)** 를 조합한 하이브리드 방식으로 동작한다.
+
+- **플랜별 제공**: **Free** — 구조적 쿼리만(최근 커밋·노트 개수 등). semantic 질문 시 "노트·커밋 내용 검색은 Pro 플랜 이상에서 이용할 수 있어요" 안내. **Pro/Team** — 하이브리드(구조적 쿼리 + RAG). chat API에서 `getEffectivePlan()`으로 만료일 포함해 유효 플랜 판단.
 
 ### 13.1 의도 분류
 

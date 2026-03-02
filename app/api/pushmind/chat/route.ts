@@ -58,6 +58,27 @@ async function getAuthUser(request: Request): Promise<{ id: string } | null> {
   return user ? { id: user.id } : null
 }
 
+/** Free: 구조적 쿼리만. Pro/Team: 하이브리드(구조적 쿼리 + RAG). 만료된 유료는 free로 간주. */
+async function getEffectivePlan(
+  supabase: SupabaseClient,
+  userId: string
+): Promise<'free' | 'pro' | 'team'> {
+  const { data: row } = await supabase
+    .from('users')
+    .select('plan, plan_expires_at')
+    .eq('id', userId)
+    .single()
+
+  const plan = (row?.plan as string) ?? 'free'
+  const expiresAt = row?.plan_expires_at
+
+  if (plan !== 'pro' && plan !== 'team') return 'free'
+  if (!expiresAt) return 'free'
+  if (new Date(expiresAt) <= new Date()) return 'free'
+
+  return plan as 'pro' | 'team'
+}
+
 function buildContext(matches: MatchRow[]): string {
   return matches
     .map((m, i) => {
@@ -153,13 +174,25 @@ export async function POST(request: Request) {
     )
   }
 
+  const effectivePlan = await getEffectivePlan(supabaseAdmin, userId)
+  const isHybrid = effectivePlan === 'pro' || effectivePlan === 'team'
+
   try {
     const intent = classifyIntent(message)
     let contextParts: string[] = []
     let ragMatches: MatchRow[] = []
     let structuralResult: StructuredResult | null = null
 
-    // structural 또는 hybrid: 구조적 쿼리 실행
+    // Free: 구조적 쿼리만. 의미 검색(RAG)은 Pro 이상.
+    if (!isHybrid && intent === 'semantic') {
+      return NextResponse.json({
+        answer:
+          '노트·커밋 내용 검색(의미 검색)은 Pro 플랜 이상에서 이용할 수 있어요. Free 플랜에서는 "가장 최근 커밋", "노트 몇 개" 같은 구조적 질문으로 이용해 주세요.',
+        sources: [],
+      })
+    }
+
+    // structural 또는 hybrid: 구조적 쿼리 실행 (Free는 structural/hybrid 둘 다 구조적만)
     if (intent === 'structural' || intent === 'hybrid') {
       structuralResult = await queryStructured(supabaseAdmin, userId, message)
       if (structuralResult) {
@@ -167,8 +200,8 @@ export async function POST(request: Request) {
       }
     }
 
-    // semantic 또는 hybrid: RAG 검색
-    if (intent === 'semantic' || intent === 'hybrid') {
+    // Pro/Team만: semantic 또는 hybrid 시 RAG 검색
+    if (isHybrid && (intent === 'semantic' || intent === 'hybrid')) {
       const queryEmbedding = await getEmbedding(message)
       ragMatches = await searchSimilar(supabaseAdmin, userId, queryEmbedding, MATCH_COUNT)
       if (ragMatches.length > 0) {
@@ -176,8 +209,8 @@ export async function POST(request: Request) {
       }
     }
 
-    // structural만인데 패턴 매칭 안 됨 → 4단계: LLM으로 재분류 후 semantic이면 RAG 폴백
-    if (intent === 'structural' && !structuralResult) {
+    // structural만인데 패턴 매칭 안 됨 → Pro/Team일 때만 LLM 재분류 후 RAG 폴백
+    if (intent === 'structural' && !structuralResult && isHybrid) {
       const llmIntent = await classifyIntentWithLlm(message)
       if (llmIntent === 'semantic' || llmIntent === 'hybrid') {
         const queryEmbedding = await getEmbedding(message)
@@ -193,6 +226,14 @@ export async function POST(request: Request) {
           sources: [],
         })
       }
+    }
+
+    // 구조적 질문만인데 결과 없음 (Free 포함)
+    if (intent === 'structural' && !structuralResult && contextParts.length === 0) {
+      return NextResponse.json({
+        answer: '해당 질문에 맞는 구조적 조회를 찾지 못했어요. "가장 최근 커밋", "노트 몇 개", "활성 상태 노트" 등으로 질문해 보세요.',
+        sources: [],
+      })
     }
 
     // context 없음 (semantic인데 RAG 매칭 없음, 또는 hybrid인데 둘 다 없음)

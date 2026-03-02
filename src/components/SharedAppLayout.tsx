@@ -452,6 +452,11 @@ export default function SharedAppLayout({ user, children }: SharedAppLayoutProps
         onOpenChange={setShowPushMindChat}
         messages={pushMindMessages}
         setMessages={setPushMindMessages}
+        isHybridPlan={
+          !!profile &&
+          (profile.plan === 'pro' || profile.plan === 'team') &&
+          (!profile.plan_expires_at || new Date(profile.plan_expires_at) > new Date())
+        }
       />
     </SidebarProvider>
   )

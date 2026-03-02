@@ -27,7 +27,7 @@
 ### 이용요금 페이지 (비로그인 공개)
 - **위치**: `app/(dashboard)/pricing/page.tsx`
 - **노출**: 비로그인 시 `/pricing` 접근 가능.
-- **구성**: 랜딩과 동일한 헤더, 본문에 Free/Pro/Team 플랜 카드(가격·한도·특징), 하단 지금 시작하기. **로그인**·**지금 시작하기** 클릭 시 Google OAuth 직접 호출.
+- **구성**: 랜딩과 동일한 헤더, 본문에 **월/연 구독 탭** + Free/Pro/Team 플랜 카드(plan 페이지와 동일한 카드·가격 표시·Check 리스트·PushMind 문구, 구독/결제 버튼 없음), 하단 지금 시작하기. **로그인**·**지금 시작하기** 클릭 시 Google OAuth 직접 호출.
 
 ### 공통 레이아웃 (SharedAppLayout)
 - **위치**: `src/components/SharedAppLayout.tsx`
@@ -64,7 +64,7 @@
 ### 홈 화면 (로그인 후)
 - **위치**: `app/(dashboard)/page.tsx`
 - **노출**: 로그인 후 path `/`일 때 (비로그인 시 `/`는 랜딩 페이지).
-- SharedAppLayout 내부: **활동 그래프(ContributionGraph)** 한 개만 표시. 연도별·노트/커밋 활동 히트맵, 호버 시 툴팁(날짜·활동 횟수). 로딩 중에는 Skeleton 표시. **연도별 캐시**(`activityCache`)와 레이아웃 **프리페치**로 같은 연도 재진입 시 로딩 거의 없음. **커밋푸시**·**새 노트 생성**·**알림**은 헤더 우측의 아이콘(MessageCircleMore, FilePlus, Bell)으로 제공되며, 클릭 시 SharedAppLayout에서 렌더하는 NewNoteDialog / CommitPushDialog 또는 알림 드롭다운이 열림. **PushMind**: 우측 하단 고정 플로팅 버튼(MessageSquare). 클릭 시 우측 시트 채팅 패널. 패널 열 때마다 자동 동기화(embed), 대화는 SharedAppLayout state로 페이지 이동 시에도 유지. 질문 유형에 따라 **의미 검색(RAG)** 또는 **구조적 쿼리**(가장 최근 커밋, 노트 개수, 태그에 X 있는 노트 등 DB 직접 조회)로 답변. 답변 + 참고한 출처(노트/커밋 링크·관련도). [PUSHMIND-RAG.md](./PUSHMIND-RAG.md) 참고.
+- SharedAppLayout 내부: **활동 그래프(ContributionGraph)** 한 개만 표시. 연도별·노트/커밋 활동 히트맵, 호버 시 툴팁(날짜·활동 횟수). 로딩 중에는 Skeleton 표시. **연도별 캐시**(`activityCache`)와 레이아웃 **프리페치**로 같은 연도 재진입 시 로딩 거의 없음. **커밋푸시**·**새 노트 생성**·**알림**은 헤더 우측의 아이콘(MessageCircleMore, FilePlus, Bell)으로 제공되며, 클릭 시 SharedAppLayout에서 렌더하는 NewNoteDialog / CommitPushDialog 또는 알림 드롭다운이 열림. **PushMind**: 우측 하단 고정 플로팅 버튼(MessageSquare). 클릭 시 우측 시트 채팅 패널. 패널 열 때마다 자동 동기화(embed), 대화는 SharedAppLayout state로 페이지 이동 시에도 유지. **Free 플랜**은 구조적 질문(최근 커밋·노트 개수 등)만 가능; **Pro/Team**은 의미 검색(RAG) + 구조적 쿼리(하이브리드)로 답변. 답변 + 참고한 출처(노트/커밋 링크·관련도). [PUSHMIND-RAG.md](./PUSHMIND-RAG.md) 참고.
 
 ### 요금제 페이지 (`/plan`)
 - **위치**: `app/(dashboard)/plan/page.tsx`
