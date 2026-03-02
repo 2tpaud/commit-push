@@ -40,6 +40,14 @@ import {
 import { Trash2, Edit, Plus, ArrowUpDown } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useAuthUser } from '@/components/AuthUserProvider'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import rehypeRaw from 'rehype-raw'
+import { remarkHighlightMark } from 'remark-highlight-mark'
+import { remarkRehypeOptions, proseBlockquoteHrAlign } from '@/lib/markdownProse'
+
+/** p를 div로 렌더링하여 <div> inside <p> hydration 오류 방지 */
+const markdownComponents = { p: ({ children }: { children?: React.ReactNode }) => <div className="my-0 first:mt-0 last:mb-0">{children}</div> }
 
 interface Note {
   id: string
@@ -618,8 +626,14 @@ export default function ActivityPage() {
                             {noteTitleByNoteId[commit.note_id] ?? '-'}
                           </TableCell>
                           <TableCell>{commit.title || '-'}</TableCell>
-                          <TableCell className="max-w-xs truncate text-muted-foreground">
-                            {commit.message || '-'}
+                          <TableCell className="max-w-xs text-muted-foreground">
+                            {commit.message ? (
+                              <div className={`line-clamp-2 overflow-hidden ${proseBlockquoteHrAlign} [&_ul]:list-inside [&_ul]:list-disc [&_ol]:list-inside [&_ol]:list-decimal [&_p]:my-0 [&_p:first-child]:mt-0 [&_p:last-child]:mb-0 [&_a]:text-blue-600 [&_a]:underline [&_mark]:rounded [&_mark]:px-0.5 [&_mark]:py-0.5 [&_mark]:bg-yellow-200/70 dark:[&_mark]:bg-yellow-500/30`}>
+                                <ReactMarkdown remarkPlugins={[remarkGfm, remarkHighlightMark]} rehypePlugins={[rehypeRaw]} remarkRehypeOptions={remarkRehypeOptions} components={markdownComponents}>{commit.message}</ReactMarkdown>
+                              </div>
+                            ) : (
+                              '-'
+                            )}
                           </TableCell>
                           <TableCell className="text-muted-foreground text-xs whitespace-nowrap">
                             {new Date(commit.created_at).toLocaleString('ko-KR')}

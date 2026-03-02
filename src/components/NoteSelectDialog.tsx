@@ -179,7 +179,7 @@ export default function NoteSelectDialog({
         </div>
 
         {/* 연관 노트 검색과 동일: 테이블 */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex min-h-[320px] flex-1 flex-col overflow-y-auto p-6">
           {showSkeleton ? (
             <DialogTableSkeleton />
           ) : loading ? (
@@ -191,7 +191,11 @@ export default function NoteSelectDialog({
                 : '노트가 없습니다.'}
             </div>
           ) : (
-            <div className="rounded-md border">
+            <>
+              <div className="mb-2 text-sm text-muted-foreground">
+                총 {filteredNotes.length}개 노트
+              </div>
+              <div className="rounded-md border">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -304,6 +308,7 @@ export default function NoteSelectDialog({
                 </TableBody>
               </Table>
             </div>
+            </>
           )}
         </div>
 

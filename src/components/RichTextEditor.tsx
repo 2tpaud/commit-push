@@ -4,7 +4,7 @@ import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import { Markdown } from '@tiptap/markdown'
 import { Underline } from '@tiptap/extension-underline'
-import { Highlight } from '@tiptap/extension-highlight'
+import { HighlightWithColor } from '@/extensions/HighlightWithColor'
 import { TextAlign } from '@tiptap/extension-text-align'
 import { Link } from '@tiptap/extension-link'
 import { TaskList } from '@tiptap/extension-list/task-list'
@@ -37,8 +37,10 @@ import {
   Undo2,
   Redo2,
   SeparatorHorizontal,
+  Eraser,
 } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { fixMarkdownInsideMarkTags } from '@/lib/markdownInMark'
 
 interface RichTextEditorProps {
   value: string
@@ -63,7 +65,7 @@ export default function RichTextEditor({
     extensions: [
       StarterKit.configure({ heading: { levels: [1, 2, 3, 4] } }),
       Underline,
-      Highlight.configure({ multicolor: true }),
+      HighlightWithColor.configure({ multicolor: true }),
       TextAlign.configure({ types: ['heading', 'paragraph'] }),
       Link.configure({ openOnClick: false }),
       TaskList,
@@ -85,7 +87,7 @@ export default function RichTextEditor({
       }),
       Markdown.configure({ markedOptions: { gfm: true } }),
     ],
-    content: value || '',
+    content: fixMarkdownInsideMarkTags(value || ''),
     contentType: 'markdown',
     editorProps: {
       attributes: {
@@ -106,7 +108,8 @@ export default function RichTextEditor({
     if (!editor) return
     if (value === lastEmittedRef.current) return
     isExternalUpdateRef.current = true
-    editor.commands.setContent(value || '', { contentType: 'markdown' })
+    const content = fixMarkdownInsideMarkTags(value || '')
+    editor.commands.setContent(content, { contentType: 'markdown' })
     lastEmittedRef.current = value || ''
     isExternalUpdateRef.current = false
   }, [editor, value])
@@ -512,6 +515,19 @@ function HighlightDropdown({ editor }: { editor: ReturnType<typeof useEditor> })
               <span className="h-4 w-4 rounded border border-border" style={{ backgroundColor: color }} />
             </button>
           ))}
+          <div className="my-0.5 border-t border-border" />
+          <button
+            type="button"
+            className="flex w-full shrink-0 items-center justify-center rounded p-1.5 text-muted-foreground hover:bg-gray-100 hover:text-foreground dark:hover:bg-gray-800"
+            onClick={(e) => {
+              e.preventDefault()
+              setOpen(false)
+              editor?.chain().focus().unsetHighlight().run()
+            }}
+            aria-label="형광펜 해제"
+          >
+            <Eraser className="h-4 w-4" />
+          </button>
         </div>
       )}
     </div>

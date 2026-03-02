@@ -1,53 +1,59 @@
-# 개발자 노트 — PushMind 하이브리드 (RAG + 구조적 쿼리)·문서 정리
+# 개발자 노트 — 노트 상세 인라인 편집·마크다운 렌더링·UI 정리
 
 ---
 
 주요 기능 추가:
 
-- **PushMind 하이브리드 (RAG + 구조적 쿼리)**
-  - **배경**: 노트·커밋에 대한 질문을 의미 검색(RAG)만이 아니라 "가장 최근 커밋", "노트 몇 개", "태그에 X 있는 노트" 등 DB 직접 조회로도 답할 수 있도록 확장.
-  - **플랜별 동작**: **Free** — 구조적 쿼리만 실행; semantic 질문 시 "Pro 플랜 이상에서 이용 가능" 안내 반환. **Pro/Team** — 하이브리드(구조적 쿼리 + RAG). chat API에서 `getEffectivePlan()`으로 판단.
-  - **의도 분류**: 규칙 기반 `classifyIntent()` (구체적 구문만 사용, "수" 단독 제거로 "1차수" 오분류 방지). structural로 분류됐는데 패턴이 없으면 Pro/Team일 때만 `classifyIntentWithLlm()` 호출 후 semantic이면 RAG 재시도.
-  - **구조적 쿼리**: `queryStructured()` — 최근/첫 커밋(N개), 커밋한 노트, 최근/처음 만든/오래 안 수정한 노트, 커밋 없는 노트, 연관 노트 목록, 노트/커밋 개수, 카테고리·태그·상태별 노트, 특정 노트의 최신 커밋·연관 노트 등. 구현: `src/lib/pushmindStructured.ts`. 유형 추가 시 `structuralPhrases` + 패턴 매칭·runner 함수 추가.
-  - **RAG 청크 확장**: 노트 청크에 태그·카테고리·상태·연관 노트 제목·reference_urls(최대 3)·last_commit_at, 커밋 청크에 첨부 파일명·reference_urls·created_at 포함. embed API select 확장, `related_note_ids` → 제목 조회 후 청크 반영.
-  - **출처**: structural일 때는 구조적 쿼리 결과만 출처로 표시, hybrid일 때는 structural + RAG 상위 유사도 병합·중복 제거.
-- **의도 분류·패턴 수정**
-  - "1차수"가 structural로 오분류되던 문제 → structural 구문을 구체적 구문만 사용하도록 변경.
-  - "마지막 수정한 노트", "가장 마지막에 커밋한 노트", "태그에 베트남이 있는 노트" 등 패턴·정규식 추가 및 태그 추출 정규식 수정(`태그에 X이/가 있는 노트`).
-- **문서 정리**
-  - PUSHMIND-HYBRID.md 설계 내용를 ARCHITECTURE, DATABASE, DESIGN, PRODUCT, PUSHMIND-RAG.md로 분산 기재 후 `docs/PUSHMIND-HYBRID.md` 삭제. 코드·ARCHITECTURE·docs API에서 pushmind-hybrid 참조 제거.
-- **PushMind 일일 사용량 게이지**
-  - 프로필 드롭다운(SharedAppLayout)과 플랜 페이지의 현재 사용량 카드에 PushMind 일일 사용량(`user_llm_usage.request_count`/50) 게이지 추가. 노트·커밋과 동일한 스타일로 표시. `planLimits.ts`에 `PUSHMIND_DAILY_LIMIT` 상수 추가.
+- **노트 상세 페이지 속성 인라인 편집**
+  - **생성일, tags, 참고URL, 상태**: 마우스 호버 시 옅은 회색 배경(`hover:bg-gray-100`), 클릭 시 수정 모드. 편집 중에는 호버 효과 없음.
+  - **생성일**: `datetime-local` 입력, Enter/blur 시 저장.
+  - **tags**: 콤마(,)로 여러 태그 입력, Enter 저장, 바깥 클릭 시 취소. 저장/취소 버튼 없음. 입력창 `min-w-[400px]`.
+  - **참고URL**: URL 입력 후 Enter 저장, 바깥 클릭 시 취소. 저장/취소 버튼 없음. 입력창 `min-w-[400px]`.
+  - **상태**: DropdownMenu로 선택(활성화/보관/완료). 선택 항목은 호버 시 옅은 회색만 적용(시그니처 컬러 하이라이트 없음).
+  - **속성 간격**: `mb-4` → `mb-2`로 축소.
+- **설명 영역 인라인 편집**
+  - 클릭 시 RichTextEditor + `resize-y` 드래그로 높이 조절(`min-h-[120px]`, `max-h-[400px]`). 저장/취소 버튼으로 완료.
+  - 마크다운 렌더링: ReactMarkdown + remark-gfm, remark-highlight-mark, rehype-raw. 형광펜(`==text==`)이 `<mark>`로 표시. prose 스타일(제목·목록·인용·구분선·정렬) 적용.
+- **연관 노트**
+  - **+ 버튼**: 마지막 연관 노트 밑(또는 "연관 노트가 없습니다" 밑)에 위치, 호버 시 표시. 클릭 시 `RelatedNoteSearchDialog` 열림(다중 선택).
+- **커밋 내역 Sheet 유지**
+  - 사이드바·최근 항목(`data-keep-sheet-open`) 클릭 시 `onInteractOutside`에서 `preventDefault`로 시트 유지. 다른 노트로 이동해도 시트는 열린 채 유지.
+- **새 노트 다이얼로그 카테고리 자동완성**
+  - 대·중·소분류 드롭다운 선택 항목 하이라이트를 시그니처 컬러(`bg-[#1F2A44] text-white`)에서 옅은 회색(`bg-gray-100`)으로 변경.
+- **노트 선택·연관 노트 검색 다이얼로그**
+  - `NoteSelectDialog`(커밋푸시용): RelatedNoteSearchDialog와 동일한 UI — "총 N개 노트" 표시, `min-h-[320px]` 테이블 영역.
+  - `RelatedNoteSearchDialog`: 다중 선택, 동일 스타일 적용.
 
 ---
 
 UI·API:
 
-- **PushMindChatPanel** — Pro/Team일 때 상단 "PushMind" 옆 **Hybrid** 배지 표시(`isHybridPlan` prop). 의도 분류·구조적 쿼리는 chat API 내부에서 처리.
-- **UsageGaugesInMenu** — 프로필 드롭다운 내 노트·커밋·PushMind 일일 사용량 게이지. `fetchUserProfile`에서 `user_llm_usage` 당일 `request_count` 조회.
-- **`/api/pushmind/embed`** — 노트·커밋 select 확장(청크 확장 필드), `fetchRelatedNoteTitles()`로 연관 노트 제목 조회 후 청크에 반영.
-- **`/api/pushmind/chat`** — `classifyIntent` → semantic/structural/hybrid 분기. structural 시 `queryStructured()` 호출, null이면 `classifyIntentWithLlm()` 폴백. structural·hybrid 시 context에 구조적 결과 포함, 출처 병합.
+- **노트 상세 페이지** (`app/(dashboard)/notes/[id]/page.tsx`) — 속성 인라인 편집(생성일·tags·참고URL·상태), 설명 RichTextEditor·resize-y, 연관 노트 + 버튼·RelatedNoteSearchDialog, 커밋 Sheet `onInteractOutside` 처리.
+- **NewNoteDialog** — 카테고리(대·중·소분류) 자동완성 드롭다운 선택 항목 `bg-gray-100`.
+- **NoteSelectDialog** — 커밋푸시용 단일 노트 선택. RelatedNoteSearchDialog와 동일한 테이블·"총 N개 노트" UI.
+- **RelatedNoteSearchDialog** — 연관 노트 다중 선택. `min-h-[320px]`, "총 N개 노트" 표시.
+- **RichTextEditor** — `fixMarkdownInsideMarkTags`로 `<mark>` 내부 마크다운(**, *** 등) HTML 변환. 저장 시 `<mark>**text**</mark>` 형태 로드 시 정상 표시.
 
 ---
 
 문서화:
 
-- **PUSHMIND-RAG.md** — §13 하이브리드 확장(의도 분류, 구조적 쿼리 유형 표·구현 함수·유형 추가 방법, RAG 청크 확장 요약), §10 API Route 표에 의도 분류·구조적 쿼리 반영.
-- **ARCHITECTURE.md** — pushmind/embed·chat 설명에 하이브리드(청크 확장·의도 분류·구조적 쿼리) 반영. `/api/docs/[slug]`에서 pushmind-hybrid 제거.
-- **DATABASE.md** — embeddings.content_text comment 확장, "PushMind 하이브리드에서 notes/commits 활용" 절 추가.
-- **DESIGN.md** — 홈 PushMind 문단에 의미 검색/구조적 쿼리 설명 추가.
-- **PRODUCT.md** — 사용자 흐름 하단에 PushMind 하이브리드 한 줄 추가.
-- **DESIGN.md, PLAN.md, PUSHMIND-RAG.md** — 프로필 드롭다운·플랜 페이지에 PushMind 일일 사용량 게이지 반영. PUSHMIND-RAG.md §9.3 사용량 표시 추가.
+- **DESIGN.md** — 노트 상세 속성 인라인 편집·설명·연관 노트 + 버튼, 자동완성 드롭다운 스타일(카테고리 옅은 회색/기타 시그니처 컬러), NewNoteDialog 카테고리 하이라이트, 향후 작업 참고사항 §6 반영.
 
 ---
 
 파일 구조:
 
-- `src/lib/pushmind.ts` — `NoteForChunk`, `CommitForChunk`, `buildNoteContentText`, `buildCommitContentText`, 청크 확장. 설계 참조를 PUSHMIND-RAG.md만 사용.
-- `src/lib/pushmindStructured.ts` — `classifyIntent`, `classifyIntentWithLlm`, `queryStructured`, 구조적 쿼리 유형별 runner 함수. 설계: PUSHMIND-RAG.md §13.
-- `app/api/pushmind/embed/route.ts` — select 확장, `fetchRelatedNoteTitles`, 확장된 note/commit으로 `buildChunks`·`buildCommitChunk` 호출.
-- `app/api/pushmind/chat/route.ts` — 의도 분류·structural null 시 LLM 폴백·structural/hybrid 시 context·출처 병합.
-- `app/api/docs/[slug]/route.ts` — pushmind-hybrid slug 제거.
-- `docs/PUSHMIND-HYBRID.md` — 삭제됨.
-- **pricing 페이지** — plan 페이지와 동일한 탭(월/연)·카드 레이아웃·formatPrice·PushMind 문구. 구독/결제 버튼 없음.
-- `src/lib/planLimits.ts` — `PUSHMIND_DAILY_LIMIT`(50) 추가. 프로필·플랜 페이지 게이지 공용.
+- `app/(dashboard)/notes/[id]/page.tsx` — 속성 인라인 편집, 설명 RichTextEditor·resize-y, ReactMarkdown·remark-gfm·remark-highlight-mark·rehype-raw, 연관 노트 + 버튼·RelatedNoteSearchDialog, Sheet onInteractOutside.
+- `src/components/NewNoteDialog.tsx` — 대·중·소분류 드롭다운 선택 항목 `bg-gray-100`.
+- `src/components/NoteSelectDialog.tsx` — "총 N개 노트", `min-h-[320px]` 테이블.
+- `src/components/RelatedNoteSearchDialog.tsx` — 다중 선택, 동일 UI.
+- `src/components/CommitPushDialog.tsx` — NoteSelectDialog 사용.
+- `src/components/RichTextEditor.tsx` — `fixMarkdownInsideMarkTags` 적용.
+- `src/lib/markdownInMark.ts` — `<mark>` 태그 안 마크다운(**, *** 등) HTML 변환.
+- `src/lib/markdownProse.ts` — prose 스타일(blockquote·hr·정렬·제목·목록), remark-highlight-mark의 highlight → `<mark>` 핸들러.
+- `src/lib/markdownRender.ts` — remark-rehype highlight → mark 변환 옵션(remarkProse와 중복 가능, 노트 상세는 markdownProse 사용).
+- `src/extensions/HighlightWithColor.ts` — TipTap 형광펜 색상 마크다운 저장(`<mark data-color="..." style="...">`).
+- `src/components/AppSidebar.tsx` — `data-keep-sheet-open` 속성.
+- **package.json** — react-markdown, rehype-raw, remark-gfm, remark-highlight-mark 추가.
+- `docs/DESIGN.md` — 노트 상세·자동완성·NewNoteDialog 스타일 최신화.

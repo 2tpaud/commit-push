@@ -86,11 +86,12 @@
 - **타이틀 영역**:
   - 제목: 좌측 정렬, `text-3xl font-bold`
   - 커밋 내역 아이콘: 우측 정렬, `MessageCircleMore` 아이콘, 커밋 개수 표시
-- **속성 섹션** (아이콘 + 속성명 + 값 형식):
-  - 생성일: `Calendar` 아이콘, `formatDateTime()` 형식
-  - tags: `Tag` 아이콘, Badge variant="outline"로 표시 (`#{tag}` 형식)
-  - 참고URL: `LinkIcon` 아이콘, 링크 형태로 표시
-  - 상태: 상태에 따라 아이콘 변경 (`active`: `CircleCheck`, `archived`: `Archive`, `completed`: `CheckCircle2`), 한글 표시 (활성화/보관/완료)
+- **속성 섹션** (아이콘 + 속성명 + 값 형식, 속성 간격 `mb-2`):
+  - **인라인 편집**: 생성일, tags, 참고URL, 상태 — 마우스 호버 시 옅은 회색 배경(`hover:bg-gray-100`), 클릭 시 수정 모드. 편집 중에는 호버 효과 없음.
+  - 생성일: `Calendar` 아이콘, `formatDateTime()` 형식. 클릭 시 `datetime-local` 입력, Enter/blur 시 저장.
+  - tags: `Tag` 아이콘, Badge variant="outline"로 표시 (`#{tag}` 형식). 클릭 시 인라인 편집 — 콤마(,)로 여러 태그 입력, Enter 저장, 바깥 클릭 시 취소. 저장/취소 버튼 없음. 입력창 `min-w-[400px]`.
+  - 참고URL: `LinkIcon` 아이콘, 링크 형태로 표시. 클릭 시 인라인 편집 — URL 입력 후 Enter 저장, 바깥 클릭 시 취소. 저장/취소 버튼 없음. 입력창 `min-w-[400px]`.
+  - 상태: 상태에 따라 아이콘 변경 (`active`: `CircleCheck`, `archived`: `Archive`, `completed`: `CheckCircle2`), 한글 표시 (활성화/보관/완료). 클릭 시 DropdownMenu로 선택, 선택 항목은 호버 시 옅은 회색만 적용(시그니처 컬러 하이라이트 없음).
   - 공유여부: `Globe`(공개) 또는 `Lock`(비공개) 아이콘, Switch 컴포넌트로 토글. **Pro/Team 플랜에서만 공유 ON 가능**하며, Free 플랜에서 ON 시도 시 AlertDialog로 업그레이드 유도(확인, 요금제 보기).
   - 공유URL: `is_public`이 `true`이고 `share_token`이 있을 때만 표시, 복사 버튼 포함
 - **커밋 내역 Sheet**:
@@ -99,9 +100,10 @@
   - 상태 관리: `CommitSheetProvider`로 전역 상태 관리 (페이지 이동 시에도 열림 상태 유지)
   - 닫기: **노트 본문·오버레이 클릭 시 닫힘**. **사이드바·최근 항목** 클릭 시에는 `onInteractOutside`에서 `data-keep-sheet-open` 영역이면 `preventDefault`로 시트 유지(다른 노트로 이동해도 시트는 열린 채 유지, 노트 영역 클릭 전까지).
   - 기능: 정렬(오름/내림차순), 커밋 카드(날짜·제목·시간·메시지·첨부파일 링크), 커스텀 닫기 버튼. ESC는 닫히지 않음.
-- **설명**: `whitespace-pre-wrap`로 줄바꿈 유지
+- **설명**: 인라인 편집. 클릭 시 RichTextEditor + `resize-y` 드래그로 높이 조절(`h-[220px] min-h-[120px] max-h-[400px]`). 저장/취소 버튼으로 완료. 마크다운 렌더링(형광펜 포함).
 - **연관 노트**:
   - 제목: `GitBranch` 아이콘 + "연관 노트"
+  - **+ 버튼**: 마지막 연관 노트 밑(또는 "연관 노트가 없습니다" 밑)에 위치, 호버 시 표시. 클릭 시 `RelatedNoteSearchDialog` 열림(다중 선택).
   - 목록: 각 항목 앞에 `FileText` 아이콘, 링크 형태
   - 이동 시: `?from=현재노트ID` 파라미터 추가하여 뒤로 가기 버튼 활성화
 
@@ -144,7 +146,7 @@ body {
   - RGB: `31, 42, 68`
   - CMYK: `54, 38, 0, 73`
   - HSL: `222, 37%, 19%` (대략)
-  - 사용 위치: CommitPush 로고, 텍스트, 주요 버튼 배경, 자동완성 하이라이트 등
+  - 사용 위치: CommitPush 로고, 텍스트, 주요 버튼 배경, 태그·연관 노트 등 일부 자동완성 하이라이트 등
 
 ### 기본 원칙
 - **시그니처 컬러(`#1F2A44`), 화이트, 그레이톤 사용**
@@ -248,6 +250,7 @@ body {
 ### 새 노트 / 노트 수정 다이얼로그 (NewNoteDialog)
 - **위치**: `src/components/NewNoteDialog.tsx`. 헤더의 새 노트 생성(FilePlus) 클릭 또는 작업 로그 등에서 열림.
 - **폼 구성**: 제목(필수), **설명**(RichTextEditor), 카테고리(대·중·소분류), 태그, 연관 노트, DialogFooter(취소/노트 생성·수정).
+- **카테고리 자동완성**: 대·중·소분류 드롭다운 선택 항목은 호버 시 옅은 회색(`bg-gray-100`)만 적용(시그니처 컬러 하이라이트 없음).
 - **설명 필드**:
   - **RichTextEditor** (TipTap 기반, `src/components/RichTextEditor.tsx`) 사용. DB에는 **마크다운**으로 저장(`notes.description`).
   - **드래그 핸들**: Tiptap 공식 `@tiptap/extension-drag-handle` + `NodeRange` 사용. 블록 왼쪽에 그립이 표시되며, 드래그로 블록(단락·제목·목록·인용·수평선·코드 블록 등) 순서 변경 가능.
@@ -329,15 +332,15 @@ body {
 ### 드롭다운 항목
 - 기본 상태: 흰색 배경, 검정색 텍스트
 - 호버 상태: 밝은 회색 배경 (`hover:bg-gray-100`)
-- 선택된 항목: 시그니처 컬러 배경, 흰색 텍스트 (`bg-[#1F2A44] text-white`)
+- 선택된 항목: **카테고리(대·중·소분류)** 자동완성은 옅은 회색(`bg-gray-100`)만 적용. 기타 자동완성(태그·연관 노트 등)은 시그니처 컬러 배경·흰색 텍스트 (`bg-[#1F2A44] text-white`).
 - 키보드 네비게이션 지원 (ArrowDown/Up, Enter, Escape)
 
 ## Data Table 스타일 (작업 로그, 연관 노트 검색, 노트 선택, 개발자 노트)
 
 ### 사용 위치
 - 작업 로그 페이지 (`app/(dashboard)/activity/page.tsx`) — 노트 생성 내역 탭, 커밋푸시 내역 탭
-- 연관 노트 검색 다이얼로그 (`RelatedNoteSearchDialog`) — 다중/단일 노트 선택 목록
-- 노트 선택 다이얼로그 (`NoteSelectDialog`) — 커밋푸시용 단일 노트 선택
+- 연관 노트 검색 다이얼로그 (`RelatedNoteSearchDialog`) — 다중/단일 노트 선택 목록. "총 N개 노트" 표시, `min-h-[320px]` 테이블 영역.
+- 노트 선택 다이얼로그 (`NoteSelectDialog`) — 커밋푸시용 단일 노트 선택. RelatedNoteSearchDialog와 동일한 UI("총 N개 노트", 테이블 스타일).
 - 개발자 노트 페이지 (`app/(dashboard)/developer-notes/page.tsx`) — 노트 목록
 
 ### 테이블 스타일
@@ -412,7 +415,7 @@ body {
 3. **새 컴포넌트 추가 시**: shadcn/ui 컴포넌트 우선 사용
 4. **커스텀 스타일 필요 시**: TailwindCSS 유틸리티 클래스 사용
 5. **다크모드 지원**: CSS 변수 사용으로 자동 지원되도록 유지
-6. **자동완성 하이라이트**: 시그니처 컬러 배경(`bg-[#1F2A44]`)과 흰색 텍스트(`text-white`) 사용
+6. **자동완성 하이라이트**: 카테고리(대·중·소분류)는 옅은 회색(`bg-gray-100`)만 적용. 태그·연관 노트 등 기타 자동완성은 시그니처 컬러 배경(`bg-[#1F2A44]`)과 흰색 텍스트(`text-white`) 사용
 7. **태그 표시**: 항상 Badge variant="outline" 사용, `#{tag}` 형식 유지
 8. **Data Table**: 작업 로그(노트/커밋푸시 탭), 연관 노트 검색, 노트 선택 다이얼로그, 개발자 노트는 shadcn Table + @tanstack/react-table 사용
 9. **카드뷰 레이아웃**: 카드 형태 UI가 필요할 때 위 카드뷰 스타일 참고

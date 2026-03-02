@@ -925,7 +925,7 @@ export default function NewNoteDialog({
                             }}
                             className={`w-full px-4 py-2 text-left text-sm hover:bg-gray-100 ${
                               index === selectedCategoryLargeIndex && selectedCategoryLargeIndex >= 0 && selectedCategoryLargeIndex < displayItems.length
-                                ? 'bg-[#1F2A44] text-white'
+                                ? 'bg-gray-100'
                                 : 'text-popover-foreground'
                             }`}
                           >
@@ -976,7 +976,7 @@ export default function NewNoteDialog({
                                 }}
                                 className={`w-full px-4 py-2 text-left text-sm hover:bg-gray-100 ${
                                   index === selectedCategoryMediumIndex && selectedCategoryMediumIndex >= 0 && selectedCategoryMediumIndex < displayItems.length
-                                    ? 'bg-[#1F2A44] text-white'
+                                    ? 'bg-gray-100'
                                     : 'text-popover-foreground'
                                 }`}
                               >
@@ -1034,7 +1034,7 @@ export default function NewNoteDialog({
                                 }}
                                 className={`w-full px-4 py-2 text-left text-sm hover:bg-gray-100 ${
                                   index === selectedCategorySmallIndex && selectedCategorySmallIndex >= 0 && selectedCategorySmallIndex < displayItems.length
-                                    ? 'bg-[#1F2A44] text-white'
+                                    ? 'bg-gray-100'
                                     : 'text-popover-foreground'
                                 }`}
                               >
@@ -1211,7 +1211,7 @@ export default function NewNoteDialog({
           isOpen={showRelatedNoteSearchDialog}
           onClose={() => setShowRelatedNoteSearchDialog(false)}
           onSelect={handleRelatedNoteSearchSelect}
-          excludeNoteIds={relatedNoteIds}
+          excludeNoteIds={noteId ? [noteId, ...relatedNoteIds] : relatedNoteIds}
         />
       </DialogContent>
     </Dialog>

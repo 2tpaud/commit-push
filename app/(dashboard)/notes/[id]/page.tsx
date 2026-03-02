@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useRef } from 'react'
 import { useParams, useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabaseClient'
@@ -10,8 +10,12 @@ import { recordNoteOpened, notifySidebarNotesRefresh } from '@/lib/sidebarRecent
 import { useSidebar } from '@/components/ui/sidebar'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
-import { MessageCircleMore, X, Calendar, Tag, Link as LinkIcon, ArrowUp, ArrowDown, CircleCheck, Archive, CheckCircle2, Globe, Lock, GitBranch, FileText, ArrowLeft, Copy, Check, Paperclip } from 'lucide-react'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { Input } from '@/components/ui/input'
+import CommitPushDialog from '@/components/CommitPushDialog'
+import RelatedNoteSearchDialog from '@/components/RelatedNoteSearchDialog'
+import RichTextEditor from '@/components/RichTextEditor'
+import { MessageCircleMore, X, Calendar, Tag, Link as LinkIcon, ArrowUp, ArrowDown, CircleCheck, Archive, CheckCircle2, Globe, Lock, GitBranch, FileText, ArrowLeft, Copy, Check, Paperclip, List, FolderTree, ChevronRight, Plus, Edit, ChevronLeft } from 'lucide-react'
+import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip'
 import {
   Sheet,
   SheetContent,
@@ -28,6 +32,21 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
+import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import rehypeRaw from 'rehype-raw'
+import { remarkHighlightMark } from 'remark-highlight-mark'
+import { remarkRehypeOptions, proseBlockquoteHrAlign } from '@/lib/markdownProse'
+
+/** p를 div로 렌더링하여 <div> inside <p> hydration 오류 방지 */
+const markdownComponents = { p: ({ children }: { children?: React.ReactNode }) => <div className="my-1 first:mt-0 last:mb-0">{children}</div> }
 
 interface Note {
   id: string
@@ -113,6 +132,17 @@ function formatStatus(status: string | null): string {
   return statusMap[status] || status
 }
 
+/** datetime-local input용 문자열 (YYYY-MM-DDTHH:mm) */
+function toDatetimeLocal(dateString: string): string {
+  const d = new Date(dateString)
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  const h = String(d.getHours()).padStart(2, '0')
+  const min = String(d.getMinutes()).padStart(2, '0')
+  return `${y}-${m}-${day}T${h}:${min}`
+}
+
 export default function NoteDetailPage() {
   const params = useParams()
   const searchParams = useSearchParams()
@@ -123,17 +153,42 @@ export default function NoteDetailPage() {
   const openCommitId = searchParams?.get('openCommit') ?? null
 
   const user = useAuthUser()
-  const { isOpen, openSheet, closeSheet, currentNoteId, setCurrentNoteId } = useCommitSheet()
+  const { isOpen, openSheet, closeSheet, currentNoteId, setCurrentNoteId, commitSheetExpanded, setCommitSheetExpanded } = useCommitSheet()
   const { open: isSidebarOpen } = useSidebar()
   const [note, setNote] = useState<Note | null>(null)
   const [commits, setCommits] = useState<Commit[]>([])
   const [relatedNotes, setRelatedNotes] = useState<RelatedNote[]>([])
   const [windowWidth, setWindowWidth] = useState(0)
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
+  const [commitViewMode, setCommitViewMode] = useState<'list' | 'tree'>('tree')
+  const [expandedYears, setExpandedYears] = useState<Record<string, boolean>>({})
+  const [expandedYearMonths, setExpandedYearMonths] = useState<Record<string, boolean>>({})
   const [copied, setCopied] = useState(false)
   const [userPlan, setUserPlan] = useState<string | null>(null)
   const [proRequiredOpen, setProRequiredOpen] = useState(false)
   const [highlightedCommitId, setHighlightedCommitId] = useState<string | null>(null)
+  const [showCommitPushDialog, setShowCommitPushDialog] = useState(false)
+  const [editingCommitId, setEditingCommitId] = useState<string | null>(null)
+  const [editingMetaField, setEditingMetaField] = useState<'created_at' | 'tags' | 'reference_urls' | 'status' | 'description' | null>(null)
+  const [editingTags, setEditingTags] = useState<string[]>([])
+  const [editingTagInput, setEditingTagInput] = useState('')
+  const [editingUrls, setEditingUrls] = useState<string[]>([])
+  const [editingUrlInput, setEditingUrlInput] = useState('')
+  const [editingDescriptionOriginal, setEditingDescriptionOriginal] = useState<string>('')
+  const metaEditRef = useRef<HTMLDivElement>(null)
+
+  const [showRelatedNoteDialog, setShowRelatedNoteDialog] = useState(false)
+
+  useEffect(() => {
+    if (editingMetaField !== 'tags' && editingMetaField !== 'reference_urls' && editingMetaField !== 'description') return
+    const handleClickOutside = (e: MouseEvent) => {
+      if (metaEditRef.current && !metaEditRef.current.contains(e.target as Node)) {
+        setEditingMetaField(null)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [editingMetaField])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -282,31 +337,41 @@ export default function NoteDetailPage() {
     }
   }, [isOpen, user?.id, currentNoteId, noteId])
 
-  const containerStyle = useMemo(() => {
+  const { containerStyle, commitSheetWidth } = useMemo(() => {
     if (windowWidth === 0) {
       return {
-        marginLeft: 'auto',
-        marginRight: 'auto',
-        maxWidth: '896px',
+        containerStyle: {
+          marginLeft: 'auto',
+          marginRight: 'auto',
+          maxWidth: '896px',
+        } as React.CSSProperties,
+        commitSheetWidth: 0,
       }
     }
 
     const sidebarWidth = isSidebarOpen ? 256 : 0
     const maxContentWidth = 896
-    const sheetWidth = isOpen ? (windowWidth >= 640 ? 384 : windowWidth * 0.75) : 0
-    
     const sidebarInsetWidth = windowWidth - sidebarWidth
+    const minSheetWidth = windowWidth >= 640 ? 384 : windowWidth * 0.75
+    const maxSheetWidth = Math.floor(sidebarInsetWidth / 3)
+    const sheetWidth = isOpen
+      ? (commitSheetExpanded ? maxSheetWidth : minSheetWidth)
+      : 0
+
     const availableWidth = sidebarInsetWidth - sheetWidth
     const centerOffset = Math.max(0, (availableWidth - maxContentWidth) / 2)
     const marginLeft = centerOffset
     const marginRight = sheetWidth + centerOffset
-    
+
     return {
-      marginLeft: `${marginLeft}px`,
-      marginRight: `${marginRight}px`,
-      maxWidth: `${maxContentWidth}px`,
+      containerStyle: {
+        marginLeft: `${marginLeft}px`,
+        marginRight: `${marginRight}px`,
+        maxWidth: `${maxContentWidth}px`,
+      },
+      commitSheetWidth: sheetWidth,
     }
-  }, [windowWidth, isSidebarOpen, isOpen])
+  }, [windowWidth, isSidebarOpen, isOpen, commitSheetExpanded])
 
   const sortedCommits = useMemo(() => {
     const sorted = [...commits].sort((a, b) => {
@@ -316,6 +381,31 @@ export default function NoteDetailPage() {
     })
     return sorted
   }, [commits, sortOrder])
+
+  /** 트리 뷰: 년 > 월 계층 구조. sortOrder에 따라 년·월 순서 결정 */
+  const commitsByYearMonth = useMemo(() => {
+    const byYear = new Map<number, Map<number, Commit[]>>()
+    for (const c of sortedCommits) {
+      const d = new Date(c.created_at)
+      const y = d.getFullYear()
+      const m = d.getMonth() + 1
+      if (!byYear.has(y)) byYear.set(y, new Map())
+      const monthMap = byYear.get(y)!
+      const arr = monthMap.get(m) ?? []
+      arr.push(c)
+      monthMap.set(m, arr)
+    }
+    const years = Array.from(byYear.keys()).sort((a, b) =>
+      sortOrder === 'desc' ? b - a : a - b
+    )
+    return years.map((year) => {
+      const monthMap = byYear.get(year)!
+      const months = Array.from(monthMap.entries())
+        .map(([month, commits]) => ({ month, commits }))
+        .sort((a, b) => (sortOrder === 'desc' ? b.month - a.month : a.month - b.month))
+      return { year, months }
+    })
+  }, [sortedCommits, sortOrder])
 
   useEffect(() => {
     if (!isOpen || !highlightedCommitId || !sortedCommits.some((c) => c.id === highlightedCommitId)) return
@@ -396,8 +486,11 @@ export default function NoteDetailPage() {
           <Sheet 
             open={isOpen} 
             onOpenChange={(open) => {
-              if (open) openSheet()
-              else closeSheet()
+              if (open) {
+                openSheet()
+              } else if (!showCommitPushDialog) {
+                closeSheet()
+              }
             }}
             modal={false}
           >
@@ -427,31 +520,102 @@ export default function NoteDetailPage() {
             <SheetContent 
               side="right"
               onEscapeKeyDown={(e) => e.preventDefault()}
+              onOpenAutoFocus={(e) => e.preventDefault()}
               onInteractOutside={(e) => {
                 if ((e.target as HTMLElement).closest?.('[data-keep-sheet-open]')) e.preventDefault()
               }}
               className="[&>button]:hidden"
+              style={commitSheetWidth > 0 ? { width: `${commitSheetWidth}px`, maxWidth: 'none' } : undefined}
             >
-              <SheetHeader>
+              <SheetHeader className="border-b border-border pb-2">
                 <div className="flex items-center justify-between">
-                  <SheetTitle>커밋 내역</SheetTitle>
                   <div className="flex items-center gap-2">
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <button
+                    <TooltipProvider delayDuration={600}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            type="button"
+                            onClick={() => setCommitSheetExpanded((p) => !p)}
+                            className="flex items-center justify-center rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                            aria-label={commitSheetExpanded ? '축소' : '확대'}
+                          >
+                            {commitSheetExpanded ? (
+                              <ChevronRight className="h-4 w-4" aria-hidden />
+                            ) : (
+                              <ChevronLeft className="h-4 w-4" aria-hidden />
+                            )}
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent>{commitSheetExpanded ? '최소 범위로 축소' : '최대 범위로 확대'}</TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                    <SheetTitle>커밋 내역</SheetTitle>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <TooltipProvider delayDuration={600}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
                           type="button"
-                          onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+                          onClick={() => {
+                            setEditingCommitId(null)
+                            setShowCommitPushDialog(true)
+                          }}
                           className="flex items-center gap-1 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-                        >
-                          {sortOrder === 'desc' ? (
-                            <ArrowDown className="h-4 w-4" />
-                          ) : (
-                            <ArrowUp className="h-4 w-4" />
-                          )}
-                        </button>
-                      </TooltipTrigger>
-                      <TooltipContent>{sortOrder === 'asc' ? '내림차순 정렬' : '오름차순 정렬'}</TooltipContent>
-                    </Tooltip>
+                          aria-label="커밋 추가"
+                          >
+                            <Plus className="h-4 w-4" aria-hidden />
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent>커밋 추가</TooltipContent>
+                      </Tooltip>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            type="button"
+                            onClick={() => setCommitViewMode('tree')}
+                            className={`flex items-center gap-1 rounded-sm ring-offset-background transition-opacity focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 ${
+                              commitViewMode === 'tree' ? 'opacity-100 text-[#1F2A44]' : 'opacity-70 hover:opacity-100'
+                            }`}
+                            aria-label="트리 뷰"
+                          >
+                            <FolderTree className="h-4 w-4" aria-hidden />
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent>트리 뷰</TooltipContent>
+                      </Tooltip>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            type="button"
+                            onClick={() => setCommitViewMode('list')}
+                            className={`flex items-center gap-1 rounded-sm ring-offset-background transition-opacity focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 ${
+                              commitViewMode === 'list' ? 'opacity-100 text-[#1F2A44]' : 'opacity-70 hover:opacity-100'
+                            }`}
+                            aria-label="목록 뷰"
+                          >
+                            <List className="h-4 w-4" aria-hidden />
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent>목록 뷰</TooltipContent>
+                      </Tooltip>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            type="button"
+                            onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+                            className="flex items-center gap-1 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                          >
+                            {sortOrder === 'desc' ? (
+                              <ArrowDown className="h-4 w-4" />
+                            ) : (
+                              <ArrowUp className="h-4 w-4" />
+                            )}
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent>{sortOrder === 'asc' ? '내림차순 정렬' : '오름차순 정렬'}</TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
                     <button
                       type="button"
                       onClick={closeSheet}
@@ -464,15 +628,20 @@ export default function NoteDetailPage() {
                 </div>
               </SheetHeader>
 
-              <div className="mt-6 space-y-4 overflow-auto">
+              <div className="mt-4 space-y-4 overflow-auto">
                 {sortedCommits.length === 0 ? (
                   <p className="text-sm text-muted-foreground">커밋 내역이 없습니다.</p>
-                ) : (
+                ) : commitViewMode === 'list' ? (
                   sortedCommits.map((commit) => (
-                    <div
+                    <button
                       key={commit.id}
+                      type="button"
                       id={`commit-${commit.id}`}
-                      className={`rounded-lg border p-4 transition-all duration-300 ${
+                      onClick={() => {
+                        setEditingCommitId(commit.id)
+                        setShowCommitPushDialog(true)
+                      }}
+                      className={`group/card w-full rounded-lg border p-4 text-left transition-colors duration-150 hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 dark:hover:bg-gray-800 ${
                         highlightedCommitId === commit.id
                           ? 'border-[#1F2A44] bg-[#1F2A44]/10 ring-2 ring-[#1F2A44] ring-offset-2 shadow-md'
                           : 'border-border bg-card'
@@ -487,14 +656,15 @@ export default function NoteDetailPage() {
                             {commit.title}
                           </h3>
                         </div>
-                        <span className="shrink-0 text-xs text-muted-foreground">
+                        <span className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
                           {formatTime(commit.created_at)}
+                          <Edit className="h-4 w-4 shrink-0 opacity-0 transition-opacity group-hover/card:opacity-70" aria-hidden />
                         </span>
                       </div>
                       {commit.message && (
-                        <p className="text-sm text-foreground whitespace-pre-wrap">
-                          {commit.message}
-                        </p>
+                        <div className={`commit-message-prose text-sm text-foreground ${proseBlockquoteHrAlign} [&_ul]:list-inside [&_ul]:list-disc [&_ol]:list-inside [&_ol]:list-decimal [&_pre]:overflow-x-auto [&_pre]:rounded [&_pre]:bg-muted [&_pre]:p-2 [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_h1]:text-lg [&_h2]:text-base [&_h3]:text-sm [&_h1,_h2,_h3]:font-semibold [&_h1,_h2,_h3]:mt-2 [&_h1]:mt-0 [&_p]:my-1 [&_p:first-child]:mt-0 [&_p:last-child]:mb-0 [&_a]:text-blue-600 [&_a]:underline [&_a:hover]:no-underline [&_mark]:rounded [&_mark]:px-0.5 [&_mark]:py-0.5 [&_mark]:bg-yellow-200/70 dark:[&_mark]:bg-yellow-500/30`}>
+                          <ReactMarkdown remarkPlugins={[remarkGfm, remarkHighlightMark]} rehypePlugins={[rehypeRaw]} remarkRehypeOptions={remarkRehypeOptions} components={markdownComponents}>{commit.message}</ReactMarkdown>
+                        </div>
                       )}
                       {commit.attachments && commit.attachments.length > 0 && (
                         <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -505,6 +675,7 @@ export default function NoteDetailPage() {
                               href={att.web_view_link}
                               target="_blank"
                               rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
                               className="text-sm text-blue-600 hover:underline"
                             >
                               {att.name || '첨부파일'}
@@ -512,68 +683,344 @@ export default function NoteDetailPage() {
                           ))}
                         </div>
                       )}
-                    </div>
+                    </button>
                   ))
+                ) : (
+                  commitsByYearMonth.map(({ year, months }) => {
+                    const yearKey = String(year)
+                    const yearOpen = expandedYears[yearKey] ?? true
+                    return (
+                      <div key={year} className="space-y-3">
+                        <h3 className="sticky top-0 z-10 bg-background/95 py-1 text-sm font-semibold text-[#1F2A44]">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setExpandedYears((prev) => ({
+                                ...prev,
+                                [yearKey]: !(prev[yearKey] ?? true),
+                              }))
+                            }
+                            className="flex w-full items-center justify-between gap-2 rounded-md px-1 text-left hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          >
+                            <span className="flex items-center gap-1.5">
+                              <ChevronRight
+                                className={`h-3.5 w-3.5 shrink-0 transition-transform ${yearOpen ? 'rotate-90' : ''}`}
+                                aria-hidden
+                              />
+                              <span>{year}년</span>
+                            </span>
+                          </button>
+                        </h3>
+                        {yearOpen && (
+                          <div className="space-y-4 border-l border-border pl-3">
+                            {months.map(({ month, commits: monthCommits }) => {
+                              const ymKey = `${year}-${month}`
+                              const monthOpen = expandedYearMonths[ymKey] ?? true
+                              return (
+                                <div key={ymKey} className="space-y-2 pl-2">
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setExpandedYearMonths((prev) => ({
+                                        ...prev,
+                                        [ymKey]: !(prev[ymKey] ?? true),
+                                      }))
+                                    }
+                                    className="flex items-center gap-1 rounded-md px-1 text-xs font-medium text-muted-foreground hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                  >
+                                    <ChevronRight
+                                      className={`h-3 w-3 shrink-0 transition-transform ${monthOpen ? 'rotate-90' : ''}`}
+                                      aria-hidden
+                                    />
+                                    <span>{month}월</span>
+                                  </button>
+                                  {monthOpen && (
+                                    <div className="space-y-3">
+                                      {monthCommits.map((commit) => (
+                                        <button
+                                          key={commit.id}
+                                          type="button"
+                                          id={`commit-${commit.id}`}
+                                          onClick={() => {
+                                            setEditingCommitId(commit.id)
+                                            setShowCommitPushDialog(true)
+                                          }}
+                                          className={`group/card w-full rounded-lg border p-4 text-left transition-colors duration-150 hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 dark:hover:bg-gray-800 ${
+                                            highlightedCommitId === commit.id
+                                              ? 'border-[#1F2A44] bg-[#1F2A44]/10 ring-2 ring-[#1F2A44] ring-offset-2 shadow-md'
+                                              : 'border-border bg-card'
+                                          }`}
+                                        >
+                                          <div className="mb-2 flex items-start justify-between gap-3">
+                                            <div className="flex flex-col gap-1">
+                                              <span className="text-xs font-bold text-[#1F2A44]">
+                                                {formatDate(commit.created_at)}
+                                              </span>
+                                              <h3 className="text-sm font-semibold text-[#1F2A44]">
+                                                {commit.title}
+                                              </h3>
+                                            </div>
+                                            <span className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
+                                              {formatTime(commit.created_at)}
+                                              <Edit className="h-4 w-4 shrink-0 opacity-0 transition-opacity group-hover/card:opacity-70" aria-hidden />
+                                            </span>
+                                          </div>
+                                          {commit.message && (
+                                            <div className={`commit-message-prose text-sm text-foreground ${proseBlockquoteHrAlign} [&_ul]:list-inside [&_ul]:list-disc [&_ol]:list-inside [&_ol]:list-decimal [&_pre]:overflow-x-auto [&_pre]:rounded [&_pre]:bg-muted [&_pre]:p-2 [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_h1]:text-lg [&_h2]:text-base [&_h3]:text-sm [&_h1,_h2,_h3]:font-semibold [&_h1,_h2,_h3]:mt-2 [&_h1]:mt-0 [&_p]:my-1 [&_p:first-child]:mt-0 [&_p:last-child]:mb-0 [&_a]:text-blue-600 [&_a]:underline [&_a:hover]:no-underline [&_mark]:rounded [&_mark]:px-0.5 [&_mark]:py-0.5 [&_mark]:bg-yellow-200/70 dark:[&_mark]:bg-yellow-500/30`}>
+                                              <ReactMarkdown remarkPlugins={[remarkGfm, remarkHighlightMark]} rehypePlugins={[rehypeRaw]} remarkRehypeOptions={remarkRehypeOptions} components={markdownComponents}>{commit.message}</ReactMarkdown>
+                                            </div>
+                                          )}
+                                          {commit.attachments && commit.attachments.length > 0 && (
+                                            <div className="mt-2 flex flex-wrap items-center gap-2">
+                                              <Paperclip className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
+                                              {commit.attachments.map((att, idx) => (
+                                                <a
+                                                  key={idx}
+                                                  href={att.web_view_link}
+                                                  target="_blank"
+                                                  rel="noopener noreferrer"
+                                                  onClick={(e) => e.stopPropagation()}
+                                                  className="text-sm text-blue-600 hover:underline"
+                                                >
+                                                  {att.name || '첨부파일'}
+                                                </a>
+                                              ))}
+                                            </div>
+                                          )}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })
                 )}
               </div>
             </SheetContent>
           </Sheet>
         </div>
 
-        <div className="mb-3 flex items-center text-left text-sm">
+        <div className="mb-2 flex items-center text-left text-sm">
           <div className="flex w-24 shrink-0 items-center gap-1.5 text-muted-foreground">
             <Calendar className="h-4 w-4" />
             <span>생성일</span>
           </div>
           <span className="mx-3 text-muted-foreground">:</span>
-          <span className="text-foreground">{formatDateTime(note.created_at)}</span>
+          <div
+            className={`group flex min-w-0 flex-1 items-center gap-2 rounded px-1 py-0.5 transition-colors ${editingMetaField !== 'created_at' ? 'hover:bg-gray-100 dark:hover:bg-gray-800/80' : ''}`}
+            onClick={() => setEditingMetaField('created_at')}
+          >
+            {editingMetaField === 'created_at' ? (
+              <Input
+                type="datetime-local"
+                defaultValue={toDatetimeLocal(note.created_at)}
+                className="h-8 max-w-[220px]"
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') setEditingMetaField(null)
+                  if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+                }}
+                onBlur={async (e) => {
+                  const val = e.target.value
+                  setEditingMetaField(null)
+                  if (!val || !user || !noteId) return
+                  const iso = new Date(val).toISOString()
+                  const { error } = await supabase.from('notes').update({ created_at: iso }).eq('id', noteId).eq('user_id', user.id)
+                  if (!error) {
+                    setNote({ ...note, created_at: iso })
+                    notifySidebarNotesRefresh()
+                  }
+                }}
+                onClick={(e) => e.stopPropagation()}
+              />
+            ) : (
+              <span className="text-foreground">{formatDateTime(note.created_at)}</span>
+            )}
+          </div>
         </div>
 
-        <div className="mb-3 flex items-start text-left text-sm">
+        <div className="mb-2 flex items-start text-left text-sm">
           <div className="flex w-24 shrink-0 items-center gap-1.5 text-muted-foreground">
             <Tag className="h-4 w-4" />
             <span>tags</span>
           </div>
           <span className="mx-3 text-muted-foreground">:</span>
-          <div className="flex flex-wrap items-center gap-2">
-            {note.tags && note.tags.length > 0 ? (
-              note.tags.map((tag, index) => (
-                <Badge key={index} variant="outline">
-                  #{tag}
-                </Badge>
-              ))
+          <div
+            ref={editingMetaField === 'tags' ? metaEditRef : undefined}
+            className={`group flex min-w-0 flex-1 flex-wrap items-center gap-2 rounded px-1 py-0.5 transition-colors ${editingMetaField !== 'tags' ? 'hover:bg-gray-100 dark:hover:bg-gray-800/80' : ''}`}
+            onClick={() => {
+              if (editingMetaField !== 'tags') {
+                setEditingTags(note.tags ? [...note.tags] : [])
+                setEditingTagInput('')
+                setEditingMetaField('tags')
+              }
+            }}
+          >
+            {editingMetaField === 'tags' ? (
+              <div
+                className="flex min-w-0 flex-1 flex-wrap items-center gap-2"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {editingTags.map((tag, i) => (
+                  <Badge key={i} variant="outline" className="gap-1 pr-1">
+                    #{tag}
+                    <button type="button" onClick={() => setEditingTags((p) => p.filter((_, j) => j !== i))} className="rounded hover:bg-muted">
+                      <X className="h-3 w-3" />
+                    </button>
+                  </Badge>
+                ))}
+                <Input
+                  placeholder="태그 입력 (콤마로 구분, Enter 저장)"
+                  value={editingTagInput}
+                  onChange={(e) => setEditingTagInput(e.target.value)}
+                  className="h-7 min-w-[400px]"
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') {
+                      setEditingMetaField(null)
+                      return
+                    }
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      const parts = editingTagInput.split(',').map((s) => s.trim()).filter(Boolean)
+                      const newTags = [...editingTags]
+                      for (const t of parts) {
+                        if (t && !newTags.includes(t)) newTags.push(t)
+                      }
+                      setEditingTagInput('')
+                      if (!user || !noteId) return
+                      supabase.from('notes').update({ tags: newTags }).eq('id', noteId).eq('user_id', user.id).then(({ error }) => {
+                        if (!error) {
+                          setNote({ ...note, tags: newTags })
+                          setEditingMetaField(null)
+                          notifySidebarNotesRefresh()
+                        }
+                      })
+                      return
+                    }
+                    if (e.key === ',') {
+                      e.preventDefault()
+                      const parts = editingTagInput.split(',').map((s) => s.trim()).filter(Boolean)
+                      setEditingTags((p) => {
+                        const next = [...p]
+                        for (const t of parts) {
+                          if (t && !next.includes(t)) next.push(t)
+                        }
+                        return next
+                      })
+                      setEditingTagInput('')
+                    }
+                  }}
+                />
+              </div>
             ) : (
-              <span className="text-muted-foreground"></span>
+              <div className="flex flex-wrap items-center gap-2">
+                {note.tags && note.tags.length > 0 ? (
+                  note.tags.map((tag, index) => (
+                    <Badge key={index} variant="outline">
+                      #{tag}
+                    </Badge>
+                  ))
+                ) : (
+                  <span className="text-muted-foreground"></span>
+                )}
+              </div>
             )}
           </div>
         </div>
 
-        <div className="mb-3 flex items-start text-left text-sm">
+        <div
+          ref={editingMetaField === 'reference_urls' ? metaEditRef : undefined}
+          className="mb-2 flex items-start text-left text-sm"
+        >
           <div className="flex w-24 shrink-0 items-center gap-1.5 text-muted-foreground">
             <LinkIcon className="h-4 w-4" />
             <span>참고URL</span>
           </div>
-          <span className="mx-3 text-muted-foreground">:</span>
-          <div className="flex flex-wrap gap-2">
-            {note.reference_urls && note.reference_urls.length > 0 ? (
-              note.reference_urls.map((url, index) => (
-                <a
-                  key={index}
-                  href={url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-sm text-blue-600 hover:underline"
-                >
-                  {url}
-                </a>
-              ))
+          <span className="mx-3 shrink-0 text-muted-foreground">:</span>
+          <div
+            className={`flex min-h-[1.5rem] min-w-0 flex-1 flex-wrap items-center gap-2 self-stretch rounded px-1 py-0.5 transition-colors ${editingMetaField !== 'reference_urls' ? 'hover:bg-gray-100 dark:hover:bg-gray-800/80' : ''}`}
+            onClick={() => {
+              if (editingMetaField !== 'reference_urls') {
+                setEditingUrls(note.reference_urls ? [...note.reference_urls] : [])
+                setEditingUrlInput('')
+                setEditingMetaField('reference_urls')
+              }
+            }}
+          >
+            {editingMetaField === 'reference_urls' ? (
+              <div
+                className="flex min-w-0 flex-1 flex-wrap items-center gap-2"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {editingUrls.map((url, i) => (
+                  <span key={i} className="inline-flex items-center gap-1 rounded bg-muted px-2 py-0.5 text-sm">
+                    <a href={url} target="_blank" rel="noopener noreferrer" className="max-w-[180px] truncate text-blue-600 hover:underline" onClick={(e) => e.stopPropagation()}>
+                      {url}
+                    </a>
+                    <button type="button" onClick={() => setEditingUrls((p) => p.filter((_, j) => j !== i))} className="rounded hover:bg-muted-foreground/20">
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
+                ))}
+                <Input
+                  placeholder="URL 입력 후 Enter 저장"
+                  value={editingUrlInput}
+                  onChange={(e) => setEditingUrlInput(e.target.value)}
+                  className="h-7 min-w-[400px]"
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') {
+                      setEditingMetaField(null)
+                      return
+                    }
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      let finalUrls = [...editingUrls]
+                      const u = editingUrlInput.trim()
+                      if (u && !finalUrls.includes(u)) finalUrls.push(u)
+                      setEditingUrlInput('')
+                      if (!user || !noteId) return
+                      supabase.from('notes').update({ reference_urls: finalUrls }).eq('id', noteId).eq('user_id', user.id).then(({ error }) => {
+                        if (!error) {
+                          setNote({ ...note, reference_urls: finalUrls })
+                          setEditingMetaField(null)
+                          notifySidebarNotesRefresh()
+                        }
+                      })
+                    }
+                  }}
+                />
+              </div>
             ) : (
-              <span className="text-muted-foreground"></span>
+              <div className="flex min-h-[1.5rem] flex-1 flex-wrap items-center gap-2">
+                {note.reference_urls && note.reference_urls.length > 0 ? (
+                  note.reference_urls.map((url, index) => (
+                    <a
+                      key={index}
+                      href={url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm text-blue-600 hover:underline"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {url}
+                    </a>
+                  ))
+                ) : (
+                  <span className="text-muted-foreground" />
+                )}
+              </div>
             )}
           </div>
         </div>
 
-        <div className="mb-3 flex items-center text-left text-sm">
+        <div className="mb-2 flex items-center text-left text-sm">
           <div className="flex w-24 shrink-0 items-center gap-1.5 text-muted-foreground">
             {note.status === 'active' && <CircleCheck className="h-4 w-4" />}
             {note.status === 'archived' && <Archive className="h-4 w-4" />}
@@ -582,10 +1029,66 @@ export default function NoteDetailPage() {
             <span>상태</span>
           </div>
           <span className="mx-3 text-muted-foreground">:</span>
-          <span className="text-foreground">{formatStatus(note.status)}</span>
+          <div className="group flex min-w-0 flex-1 items-center gap-2">
+            <DropdownMenu
+              onOpenChange={(open) => {
+                if (!open) setEditingMetaField(null)
+              }}
+            >
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className={`flex min-w-0 flex-1 items-center gap-2 rounded px-1 py-0.5 text-left text-foreground transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-offset-1 ${editingMetaField !== 'status' ? 'hover:bg-gray-100 dark:hover:bg-gray-800/80' : ''}`}
+                >
+                  <span>{formatStatus(note.status)}</span>
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="min-w-[8rem] border-border bg-white shadow-lg dark:bg-black">
+                <DropdownMenuItem
+                  onClick={async () => {
+                    if (!user || !noteId || note.status === 'active') return
+                    const { error } = await supabase.from('notes').update({ status: 'active' }).eq('id', noteId).eq('user_id', user.id)
+                    if (!error) {
+                      setNote({ ...note, status: 'active' })
+                      setEditingMetaField(null)
+                      notifySidebarNotesRefresh()
+                    }
+                  }}
+                >
+                  활성화
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={async () => {
+                    if (!user || !noteId || note.status === 'archived') return
+                    const { error } = await supabase.from('notes').update({ status: 'archived' }).eq('id', noteId).eq('user_id', user.id)
+                    if (!error) {
+                      setNote({ ...note, status: 'archived' })
+                      setEditingMetaField(null)
+                      notifySidebarNotesRefresh()
+                    }
+                  }}
+                >
+                  보관
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={async () => {
+                    if (!user || !noteId || note.status === 'completed') return
+                    const { error } = await supabase.from('notes').update({ status: 'completed' }).eq('id', noteId).eq('user_id', user.id)
+                    if (!error) {
+                      setNote({ ...note, status: 'completed' })
+                      setEditingMetaField(null)
+                      notifySidebarNotesRefresh()
+                    }
+                  }}
+                >
+                  완료
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
 
-        <div className="mb-3 flex items-center text-left text-sm">
+        <div className="mb-2 flex items-center text-left text-sm">
           <div className="flex w-24 shrink-0 items-center gap-1.5 text-muted-foreground">
             {note.is_public ? (
               <Globe className="h-4 w-4" />
@@ -629,7 +1132,7 @@ export default function NoteDetailPage() {
         </div>
 
         {note.is_public && note.share_token && (
-          <div className="mb-3 flex items-center text-left text-sm">
+          <div className="mb-2 flex items-center text-left text-sm">
             <div className="flex w-24 shrink-0 items-center gap-1.5 text-muted-foreground">
               <LinkIcon className="h-4 w-4" />
               <span>공유URL</span>
@@ -672,13 +1175,63 @@ export default function NoteDetailPage() {
 
         <div className="my-6 border-t border-border"></div>
 
-        <div className="mb-6 whitespace-pre-wrap text-left text-foreground">
-          {note.description || ''}
+        <div
+          ref={editingMetaField === 'description' ? metaEditRef : undefined}
+          className={`mb-6 rounded px-1 py-0.5 transition-colors ${editingMetaField !== 'description' ? 'hover:bg-gray-100 dark:hover:bg-gray-800/80' : ''}`}
+          onClick={() => {
+            if (editingMetaField !== 'description') {
+              setEditingDescriptionOriginal(note.description ?? '')
+              setEditingMetaField('description')
+            }
+          }}
+        >
+          {editingMetaField === 'description' ? (
+            <div className="flex flex-col gap-3 rounded-md border border-input bg-background p-3 shadow-sm" onClick={(e) => e.stopPropagation()}>
+              <div className="flex h-[220px] min-h-[120px] max-h-[400px] resize-y flex-col overflow-hidden rounded-lg border border-input">
+                <RichTextEditor
+                  value={note.description || ''}
+                  onChange={(val) => setNote({ ...note, description: val ?? '' })}
+                  placeholder="설명을 입력하세요."
+                  className="rich-text-editor-root min-h-0 flex-1"
+                />
+              </div>
+              <div className="mt-3 flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="default"
+                  onClick={async () => {
+                    if (!user || !noteId) return
+                    const { error } = await supabase.from('notes').update({ description: note.description }).eq('id', noteId).eq('user_id', user.id)
+                    if (!error) {
+                      setEditingMetaField(null)
+                      notifySidebarNotesRefresh()
+                    }
+                  }}
+                >
+                  저장
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => {
+                    setNote({ ...note, description: editingDescriptionOriginal })
+                    setEditingMetaField(null)
+                  }}>
+                    취소
+                  </Button>
+                </div>
+              </div>
+            ) : (
+            <div className={`note-description-prose text-left text-foreground ${proseBlockquoteHrAlign} [&_ul]:list-inside [&_ul]:list-disc [&_ol]:list-inside [&_ol]:list-decimal [&_pre]:overflow-x-auto [&_pre]:rounded [&_pre]:bg-muted [&_pre]:p-2 [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_h1]:text-2xl [&_h2]:text-xl [&_h3]:text-lg [&_h1,_h2,_h3]:font-semibold [&_h1,_h2,_h3]:mt-4 [&_h1]:mt-0 [&_p]:my-2 [&_p:first-child]:mt-0 [&_p:last-child]:mb-0 [&_a]:text-blue-600 [&_a]:underline [&_a:hover]:no-underline [&_mark]:rounded [&_mark]:px-0.5 [&_mark]:py-0.5 [&_mark]:bg-yellow-200/70 dark:[&_mark]:bg-yellow-500/30`}>
+              {note.description ? (
+                <ReactMarkdown remarkPlugins={[remarkGfm, remarkHighlightMark]} rehypePlugins={[rehypeRaw]} remarkRehypeOptions={remarkRehypeOptions} components={markdownComponents}>{note.description}</ReactMarkdown>
+              ) : (
+                <span className="text-muted-foreground">설명 없음 (클릭하여 추가)</span>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="my-6 border-t border-border"></div>
 
-        <div className="mb-6">
+        <div className="mb-6 group/related">
           <div className="mb-3 flex items-center gap-2 text-left">
             <GitBranch className="h-5 w-5 text-muted-foreground" />
             <h2 className="text-lg font-semibold text-[#1F2A44]">
@@ -697,12 +1250,88 @@ export default function NoteDetailPage() {
                   <span>{relatedNote.title}</span>
                 </Link>
               ))}
+              <button
+                type="button"
+                onClick={() => setShowRelatedNoteDialog(true)}
+                className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center self-start rounded text-muted-foreground opacity-0 transition-opacity hover:bg-gray-100 hover:text-foreground group-hover/related:opacity-100 dark:hover:bg-gray-800"
+                aria-label="연관 노트 추가"
+              >
+                <Plus className="h-4 w-4" />
+              </button>
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground">연관 노트가 없습니다.</p>
+            <div className="flex flex-col gap-2">
+              <p className="text-sm text-muted-foreground">연관 노트가 없습니다.</p>
+              <button
+                type="button"
+                onClick={() => setShowRelatedNoteDialog(true)}
+                className="flex h-7 w-7 shrink-0 items-center justify-center self-start rounded text-muted-foreground opacity-0 transition-opacity hover:bg-gray-100 hover:text-foreground group-hover/related:opacity-100 dark:hover:bg-gray-800"
+                aria-label="연관 노트 추가"
+              >
+                <Plus className="h-4 w-4" />
+              </button>
+            </div>
           )}
         </div>
     </div>
+
+      {user && (
+        <RelatedNoteSearchDialog
+          user={user}
+          isOpen={showRelatedNoteDialog}
+          onClose={() => setShowRelatedNoteDialog(false)}
+          onSelect={async (selectedIds) => {
+            if (!noteId || !user || !note) return
+            const existing = note.related_note_ids || []
+            const merged = [...new Set([...existing, ...selectedIds])].filter((id) => id !== noteId)
+            const { error } = await supabase.from('notes').update({ related_note_ids: merged }).eq('id', noteId).eq('user_id', user.id)
+            if (!error) {
+              setNote({ ...note, related_note_ids: merged })
+              if (merged.length > 0) {
+                const { data } = await supabase.from('notes').select('id, title').in('id', merged).eq('user_id', user.id)
+                setRelatedNotes((data as RelatedNote[]) || [])
+              } else {
+                setRelatedNotes([])
+              }
+              setShowRelatedNoteDialog(false)
+              notifySidebarNotesRefresh()
+            }
+          }}
+          excludeNoteIds={[noteId, ...(note?.related_note_ids || [])]}
+          singleSelect={false}
+          dialogTitle="연관 노트 추가"
+        />
+      )}
+
+      {user && (
+        <CommitPushDialog
+          user={user}
+          isOpen={showCommitPushDialog}
+          onClose={() => {
+            setShowCommitPushDialog(false)
+            setEditingCommitId(null)
+          }}
+          onSuccess={() => {
+            setEditingCommitId(null)
+            if (note?.id && user) {
+              supabase
+                .from('commits')
+                .select('id, title, message, created_at, attachments')
+                .eq('note_id', note.id)
+                .eq('user_id', user.id)
+                .order('created_at', { ascending: sortOrder === 'asc' })
+                .then(({ data }) => {
+                  setCommits((data as Commit[]) ?? [])
+                  setNote((prev) =>
+                    prev ? { ...prev, commit_count: (data?.length ?? prev.commit_count) } : null
+                  )
+                })
+            }
+          }}
+          commitId={editingCommitId ?? undefined}
+          defaultNoteId={editingCommitId ? undefined : note?.id}
+        />
+      )}
 
       <AlertDialog open={proRequiredOpen} onOpenChange={setProRequiredOpen}>
         <AlertDialogContent>

@@ -16,11 +16,11 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Plus, Trash2, Paperclip, X, FolderOpen } from 'lucide-react'
 import DrivePickerDialog from './DrivePickerDialog'
+import RichTextEditor from './RichTextEditor'
 import { getDrivePickerLastFolderId, setDrivePickerLastFolderId } from '@/lib/googleDrivePicker'
 
 interface AttachmentEntry {
@@ -35,6 +35,8 @@ interface CommitPushDialogProps {
   onSuccess?: () => void
   /** 수정 시 전달. 있으면 해당 커밋 로드 후 수정 모드 */
   commitId?: string
+  /** 노트 페이지 커밋 내역 시트에서 열 때 전달. 해당 노트가 미리 선택되고 검색 비활성화 */
+  defaultNoteId?: string
 }
 
 export default function CommitPushDialog({
@@ -43,6 +45,7 @@ export default function CommitPushDialog({
   onClose,
   onSuccess,
   commitId,
+  defaultNoteId,
 }: CommitPushDialogProps) {
   const [noteId, setNoteId] = useState('')
   const [selectedNoteTitle, setSelectedNoteTitle] = useState('')
@@ -114,8 +117,20 @@ export default function CommitPushDialog({
         })
     }
     if (isOpen && !commitId) {
-      setNoteId('')
-      setSelectedNoteTitle('')
+      if (defaultNoteId) {
+        setNoteId(defaultNoteId)
+        supabase
+          .from('notes')
+          .select('title')
+          .eq('id', defaultNoteId)
+          .single()
+          .then(({ data }) => {
+            if (data?.title) setSelectedNoteTitle(data.title)
+          })
+      } else {
+        setNoteId('')
+        setSelectedNoteTitle('')
+      }
       setTitle('')
       setMessage('')
       setReferenceUrls([''])
@@ -123,7 +138,7 @@ export default function CommitPushDialog({
       setCustomCreatedAt('')
       setShowAdditionalFields(false)
     }
-  }, [isOpen, commitId])
+  }, [isOpen, commitId, defaultNoteId])
 
   const handleNoteSelect = (id: string) => {
     setNoteId(id)
@@ -296,33 +311,37 @@ export default function CommitPushDialog({
             <div className="min-h-[200px]" aria-hidden />
           ) : (
           <form onSubmit={handleSubmit} className="space-y-6">
-            {/* 노트 선택 - 연관 노트 검색과 동일(검색 버튼 → 다이얼로그, 단일 선택) */}
+            {/* 노트 선택 - 연관 노트 검색과 동일(검색 버튼 → 다이얼로그, 단일 선택). defaultNoteId 있으면 검색 비활성화 */}
             <div>
               <div className="mb-2 flex items-center justify-between">
                 <Label>노트 선택 <span className="text-red-500">*</span></Label>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowNoteSearchDialog(true)}
-                >
-                  검색
-                </Button>
+                {!defaultNoteId && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowNoteSearchDialog(true)}
+                  >
+                    검색
+                  </Button>
+                )}
               </div>
               {noteId ? (
                 <div className="mt-2 flex flex-wrap items-center gap-2">
                   <Badge variant="outline" className="gap-1 pr-1">
                     {selectedNoteTitle || '선택된 노트'}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setNoteId('')
-                        setSelectedNoteTitle('')
-                      }}
-                      className="ml-1 hover:opacity-70"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
+                    {!defaultNoteId && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setNoteId('')
+                          setSelectedNoteTitle('')
+                        }}
+                        className="ml-1 hover:opacity-70"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    )}
                   </Badge>
                 </div>
               ) : (
@@ -347,14 +366,17 @@ export default function CommitPushDialog({
             {/* 메모 */}
             <div>
               <Label htmlFor="message">메모</Label>
-              <Textarea
+              <div
                 id="message"
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                placeholder="커밋에 대한 간단한 설명을 입력하세요"
-                className="mt-2"
-                rows={3}
-              />
+                className="mt-2 flex h-[220px] min-h-[120px] max-h-[280px] resize-y flex-col overflow-hidden rounded-lg border border-input"
+              >
+                <RichTextEditor
+                  value={message}
+                  onChange={(v) => setMessage(v ?? '')}
+                  placeholder="커밋에 대한 간단한 설명을 입력하세요"
+                  className="min-h-0 flex-1"
+                />
+              </div>
             </div>
 
             {/* 추가정보입력/수정 클릭 시 펼침 */}

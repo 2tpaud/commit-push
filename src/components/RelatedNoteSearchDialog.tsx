@@ -406,7 +406,7 @@ export default function RelatedNoteSearchDialog({
         </div>
 
         {/* Notes Table */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex min-h-[320px] flex-1 flex-col overflow-y-auto p-6">
           {showSkeleton ? (
             <DialogTableSkeleton />
           ) : loading ? (
@@ -418,7 +418,11 @@ export default function RelatedNoteSearchDialog({
                 : '노트가 없습니다.'}
             </div>
           ) : (
-            <div className="rounded-md border">
+            <>
+              <div className="mb-2 text-sm text-muted-foreground">
+                총 {filteredNotes.length}개 노트
+              </div>
+              <div className="rounded-md border">
               <Table>
                 <TableHeader>
                   {table.getHeaderGroups().map((headerGroup) => (
@@ -479,6 +483,7 @@ export default function RelatedNoteSearchDialog({
                 </TableBody>
               </Table>
             </div>
+            </>
           )}
         </div>
 
