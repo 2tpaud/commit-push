@@ -186,7 +186,7 @@ export default function PushMindChatPanel({
             PushMind
           </SheetTitle>
           <p className="text-xs text-muted-foreground font-normal mt-0.5">
-            기록이 만들어낸 또 하나의 브레인 PushMind
+            기록이 만들어낸 또 하나의 브레인
           </p>
         </SheetHeader>
 

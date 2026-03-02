@@ -812,7 +812,7 @@ comment on column public.embeddings.chunk_index is
 '동일 source 내 청크 순서. 노트 요약은 0, 커밋은 sequence 등.';
 
 comment on column public.embeddings.content_text is
-'embedding에 사용한 원문. 검색 결과 미리보기·context 구성 시 사용.';
+'embedding에 사용한 원문. 노트 청크: title, description, 카테고리, 태그, 상태, 연관 노트 제목, reference_urls(최대 3), last_commit_at. 커밋 청크: title, message, 첨부 파일명, reference_urls(최대 3), created_at. 검색 결과 미리보기·context 구성 시 사용.';
 
 comment on column public.embeddings.embedding is
 'OpenAI text-embedding-3-small 벡터(1536). dimensions 변경 시 vector(N) 수정.';
@@ -880,6 +880,15 @@ $$;
 comment on function public.match_embeddings is
 'PushMind 유사도 검색. query_embedding과 코사인 유사도 상위 match_count개 반환. similarity는 0~1(1에 가까울수록 유사).';
 ```
+
+### PushMind 하이브리드에서 notes/commits 활용
+
+- **RAG 청크(embedding)**  
+  notes: `title`, `description`, `status`, `category_large`/`medium`/`small`, `tags`, `reference_urls`, `related_note_ids`(→ 연관 노트 제목 조회), `last_commit_at`.  
+  commits: `title`, `message`, `attachments`(파일명만), `reference_urls`, `created_at`.
+- **구조적 쿼리(DB 직접)**  
+  notes: `updated_at`, `created_at`, `commit_count`, `status`, `category_*`, `tags`, `related_note_ids` (최근/처음 노트, 개수, 카테고리·태그·상태 필터, 연관 노트 등).  
+  commits: `created_at`, `note_id` (최근/첫 커밋, 특정 노트의 최신 커밋 등).
 
 ### 보안 정책
 

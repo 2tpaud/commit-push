@@ -13,6 +13,7 @@ import { NextResponse } from 'next/server'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { createServerSupabase } from '@/lib/supabaseServer'
 import { getEmbedding, searchSimilar, type MatchRow } from '@/lib/pushmind'
+import { classifyIntent, classifyIntentWithLlm, queryStructured, type StructuredResult } from '@/lib/pushmindStructured'
 import OpenAI from 'openai'
 
 const CHAT_MODEL = 'gpt-4o-mini'
@@ -25,7 +26,8 @@ const DAILY_REQUEST_LIMIT = 50
 const SYSTEM_PROMPT = `당신은 PushMind입니다. 사용자의 노트와 커밋(생각의 기록)을 기반으로 질문에 답하는 챗봇이에요.
 답변할 때는 반드시 아래 [참고]에 제공된 내용만 사용하세요. 참고에 없는 내용은 추측하지 말고 "제가 가진 기록에는 그 내용이 없어요"라고 답하세요.
 답변 본문에 "해당 내용은 노트 N, 커밋 N에서 참고했어요" 같은 출처 문구를 넣지 마세요. 출처는 별도로 표시됩니다.
-사용자 개인정보를 답변에 포함하지 마세요.`
+사용자 개인정보를 답변에 포함하지 마세요.
+[참고]에 "구조적 쿼리 결과"와 "의미 검색 결과"가 둘 다 있으면, 질문에 맞게 두 결과를 종합해서 답하세요.`
 
 function getServiceSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -152,18 +154,57 @@ export async function POST(request: Request) {
   }
 
   try {
-    const queryEmbedding = await getEmbedding(message)
-    const matches = await searchSimilar(supabaseAdmin, userId, queryEmbedding, MATCH_COUNT)
+    const intent = classifyIntent(message)
+    let contextParts: string[] = []
+    let ragMatches: MatchRow[] = []
+    let structuralResult: StructuredResult | null = null
 
-    if (matches.length === 0) {
+    // structural 또는 hybrid: 구조적 쿼리 실행
+    if (intent === 'structural' || intent === 'hybrid') {
+      structuralResult = await queryStructured(supabaseAdmin, userId, message)
+      if (structuralResult) {
+        contextParts.push(`[구조적 쿼리 결과]\n${structuralResult.text}`)
+      }
+    }
+
+    // semantic 또는 hybrid: RAG 검색
+    if (intent === 'semantic' || intent === 'hybrid') {
+      const queryEmbedding = await getEmbedding(message)
+      ragMatches = await searchSimilar(supabaseAdmin, userId, queryEmbedding, MATCH_COUNT)
+      if (ragMatches.length > 0) {
+        contextParts.push(`[의미 검색 결과]\n${buildContext(ragMatches)}`)
+      }
+    }
+
+    // structural만인데 패턴 매칭 안 됨 → 4단계: LLM으로 재분류 후 semantic이면 RAG 폴백
+    if (intent === 'structural' && !structuralResult) {
+      const llmIntent = await classifyIntentWithLlm(message)
+      if (llmIntent === 'semantic' || llmIntent === 'hybrid') {
+        const queryEmbedding = await getEmbedding(message)
+        ragMatches = await searchSimilar(supabaseAdmin, userId, queryEmbedding, MATCH_COUNT)
+        if (ragMatches.length > 0) {
+          contextParts = [`[의미 검색 결과]\n${buildContext(ragMatches)}`]
+          structuralResult = null
+        }
+      }
+      if (contextParts.length === 0) {
+        return NextResponse.json({
+          answer: '해당 질문에 맞는 구조적 조회를 찾지 못했어요. "가장 최근 커밋", "노트 몇 개", "활성 상태 노트" 등으로 질문해 보세요.',
+          sources: [],
+        })
+      }
+    }
+
+    // context 없음 (semantic인데 RAG 매칭 없음, 또는 hybrid인데 둘 다 없음)
+    if (contextParts.length === 0) {
       return NextResponse.json({
         answer:
-          '관련된 노트나 커밋을 찾지 못했어요. 아직 노트·커밋이 인덱싱되지 않았을 수 있어요. PushMind 패널 상단의 "동기화" 버튼을 눌러 주세요. 동기화 후에도 같은 메시지가 나오면, 질문을 다르게 바꿔 보시거나 노트/커밋에 해당 내용이 있는지 확인해 주세요.',
+          '관련된 노트나 커밋을 찾지 못했어요. 아직 노트·커밋이 인덱싱되지 않았을 수 있어요. PushMind 패널을 다시 열어 동기화 후에도 같은 메시지가 나오면, 질문을 다르게 바꿔 보시거나 노트/커밋에 해당 내용이 있는지 확인해 주세요.',
         sources: [],
       })
     }
 
-    const context = buildContext(matches)
+    const context = contextParts.join('\n\n')
     const userContent = `[참고]\n${context}\n\n[질문]\n${message}`
 
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
@@ -190,8 +231,17 @@ export async function POST(request: Request) {
       )
     }
 
-    const noteIds = [...new Set(matches.map((m) => m.note_id).filter(Boolean))] as string[]
-    const commitIds = [...new Set(matches.filter((m) => m.source_type === 'commit').map((m) => m.source_id))]
+    // 출처: structural + RAG 병합
+    const structuralSources = (structuralResult?.sources ?? []).map((s) => ({
+      source_type: s.source_type,
+      source_id: s.source_id,
+      note_id: s.note_id,
+      similarity: 1,
+      title: s.title,
+    }))
+
+    const noteIds = [...new Set(ragMatches.map((m) => m.note_id).filter(Boolean))] as string[]
+    const commitIds = [...new Set(ragMatches.filter((m) => m.source_type === 'commit').map((m) => m.source_id))]
 
     const noteTitleMap: Record<string, string> = {}
     const commitTitleMap: Record<string, string> = {}
@@ -210,7 +260,7 @@ export async function POST(request: Request) {
       commits?.forEach((c) => { commitTitleMap[c.id] = c.title ?? '' })
     }
 
-    const sources = matches.map((m) => {
+    const ragSources = ragMatches.map((m) => {
       const title =
         m.source_type === 'note'
           ? noteTitleMap[m.note_id!] ?? ''
@@ -223,10 +273,28 @@ export async function POST(request: Request) {
         title: title || undefined,
       }
     })
-    const topSim = sources[0]?.similarity
-    const topSources = sources.filter((s) => s.similarity === topSim)
 
-    return NextResponse.json({ answer, sources: topSources })
+    // structural만 있으면 structural 출처, RAG 있으면 RAG 상위 유사도만 (기존 동작), 둘 다 있으면 병합
+    let sources: typeof ragSources
+    if (structuralSources.length > 0 && ragSources.length === 0) {
+      sources = structuralSources
+    } else if (ragSources.length > 0) {
+      const topSim = ragSources[0]?.similarity
+      const topRag = ragSources.filter((s) => s.similarity === topSim)
+      sources = [...structuralSources, ...topRag]
+      // 중복 제거 (같은 source_id)
+      const seen = new Set<string>()
+      sources = sources.filter((s) => {
+        const key = `${s.source_type}:${s.source_id}`
+        if (seen.has(key)) return false
+        seen.add(key)
+        return true
+      })
+    } else {
+      sources = structuralSources
+    }
+
+    return NextResponse.json({ answer, sources })
   } catch (err) {
     console.error('PushMind chat error:', err)
     const message = err instanceof Error ? err.message : '답변 생성에 실패했어요.'

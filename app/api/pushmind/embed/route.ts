@@ -12,13 +12,15 @@
  */
 
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { createServerSupabase } from '@/lib/supabaseServer'
 import {
   buildChunks,
   buildCommitChunk,
   getEmbeddings,
   type ChunkRow,
+  type NoteForChunk,
+  type CommitForChunk,
 } from '@/lib/pushmind'
 
 function getServiceSupabase() {
@@ -26,6 +28,27 @@ function getServiceSupabase() {
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY
   if (!url || !key) throw new Error('Supabase service role not configured')
   return createClient(url, key)
+}
+
+/** related_note_ids → 해당 노트 title 조회 후 맵 반환 */
+async function fetchRelatedNoteTitles(
+  db: SupabaseClient,
+  userId: string,
+  noteIds: string[]
+): Promise<Map<string, string>> {
+  const unique = [...new Set(noteIds)].filter(Boolean)
+  if (unique.length === 0) return new Map()
+  const { data } = await db
+    .from('notes')
+    .select('id, title')
+    .eq('user_id', userId)
+    .in('id', unique)
+  const map = new Map<string, string>()
+  const rows = (data ?? []) as { id: string; title: string | null }[]
+  for (const row of rows) {
+    map.set(row.id, row.title ?? '')
+  }
+  return map
 }
 
 async function getAuthUser(request: Request): Promise<{ id: string } | null> {
@@ -77,7 +100,7 @@ export async function POST(request: Request) {
       // 단일 커밋 동기화
       const { data: commit, error: commitErr } = await db
         .from('commits')
-        .select('id, note_id, title, message')
+        .select('id, note_id, title, message, attachments, reference_urls, created_at')
         .eq('id', body.commitId)
         .eq('user_id', userId)
         .single()
@@ -86,10 +109,15 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Commit not found' }, { status: 404 })
       }
 
-      const chunk = buildCommitChunk(
-        { id: commit.id, title: commit.title, message: commit.message },
-        commit.note_id
-      )
+      const commitForChunk: CommitForChunk = {
+        id: commit.id,
+        title: commit.title,
+        message: commit.message,
+        attachments: commit.attachments as { name?: string }[] | null,
+        reference_urls: commit.reference_urls ?? null,
+        created_at: commit.created_at ?? null,
+      }
+      const chunk = buildCommitChunk(commitForChunk, commit.note_id)
       const [vec] = await getEmbeddings([chunk.content_text])
 
       await supabaseAdmin.from('embeddings').delete().eq('user_id', userId).eq('source_id', commit.id)
@@ -110,7 +138,7 @@ export async function POST(request: Request) {
       // 노트 1건 + 하위 커밋 동기화
       const { data: note, error: noteErr } = await db
         .from('notes')
-        .select('id, title, description')
+        .select('id, title, description, status, category_large, category_medium, category_small, tags, reference_urls, related_note_ids, last_commit_at')
         .eq('id', body.noteId)
         .eq('user_id', userId)
         .single()
@@ -119,16 +147,38 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Note not found' }, { status: 404 })
       }
 
+      const relatedIds = (note.related_note_ids ?? []) as string[]
+      const titleMap = await fetchRelatedNoteTitles(db, userId, relatedIds)
+      const relatedNoteTitles = relatedIds.map((id) => titleMap.get(id) ?? '').filter(Boolean)
+
       const { data: commits } = await db
         .from('commits')
-        .select('id, title, message')
+        .select('id, title, message, attachments, reference_urls, created_at')
         .eq('note_id', note.id)
         .order('sequence', { ascending: true })
 
-      const chunks = buildChunks(
-        { id: note.id, title: note.title, description: note.description },
-        commits ?? []
-      )
+      const noteForChunk: NoteForChunk = {
+        id: note.id,
+        title: note.title,
+        description: note.description,
+        status: note.status ?? null,
+        category_large: note.category_large ?? null,
+        category_medium: note.category_medium ?? null,
+        category_small: note.category_small ?? null,
+        tags: note.tags ?? null,
+        reference_urls: note.reference_urls ?? null,
+        related_note_titles: relatedNoteTitles,
+        last_commit_at: note.last_commit_at ?? null,
+      }
+      const commitsForChunk: CommitForChunk[] = (commits ?? []).map((c) => ({
+        id: c.id,
+        title: c.title,
+        message: c.message,
+        attachments: c.attachments as { name?: string }[] | null,
+        reference_urls: c.reference_urls ?? null,
+        created_at: c.created_at ?? null,
+      }))
+      const chunks = buildChunks(noteForChunk, commitsForChunk)
       if (chunks.length === 0) {
         await supabaseAdmin
           .from('embeddings')
@@ -162,26 +212,49 @@ export async function POST(request: Request) {
     // 전체 동기화
     const { data: notes, error: notesErr } = await db
       .from('notes')
-      .select('id, title, description')
+      .select('id, title, description, status, category_large, category_medium, category_small, tags, reference_urls, related_note_ids, last_commit_at')
       .eq('user_id', userId)
 
     if (notesErr) {
       return NextResponse.json({ error: 'Failed to fetch notes' }, { status: 500 })
     }
 
+    const allRelatedIds = (notes ?? []).flatMap((n) => (n.related_note_ids ?? []) as string[])
+    const relatedTitleMap = await fetchRelatedNoteTitles(db, userId, allRelatedIds)
+
     const allChunks: ChunkRow[] = []
     for (const note of notes ?? []) {
+      const relatedIds = (note.related_note_ids ?? []) as string[]
+      const relatedNoteTitles = relatedIds.map((id) => relatedTitleMap.get(id) ?? '').filter(Boolean)
+
       const { data: commits } = await db
         .from('commits')
-        .select('id, title, message')
+        .select('id, title, message, attachments, reference_urls, created_at')
         .eq('note_id', note.id)
         .order('sequence', { ascending: true })
-      allChunks.push(
-        ...buildChunks(
-          { id: note.id, title: note.title, description: note.description },
-          commits ?? []
-        )
-      )
+
+      const noteForChunk: NoteForChunk = {
+        id: note.id,
+        title: note.title,
+        description: note.description,
+        status: note.status ?? null,
+        category_large: note.category_large ?? null,
+        category_medium: note.category_medium ?? null,
+        category_small: note.category_small ?? null,
+        tags: note.tags ?? null,
+        reference_urls: note.reference_urls ?? null,
+        related_note_titles: relatedNoteTitles,
+        last_commit_at: note.last_commit_at ?? null,
+      }
+      const commitsForChunk: CommitForChunk[] = (commits ?? []).map((c) => ({
+        id: c.id,
+        title: c.title,
+        message: c.message,
+        attachments: c.attachments as { name?: string }[] | null,
+        reference_urls: c.reference_urls ?? null,
+        created_at: c.created_at ?? null,
+      }))
+      allChunks.push(...buildChunks(noteForChunk, commitsForChunk))
     }
 
     await supabaseAdmin.from('embeddings').delete().eq('user_id', userId)

@@ -1,60 +1,46 @@
-# 개발자 노트 — PushMind·Plan·프로필 UI (RAG 챗봇·만료일 표기·청구 내역·버튼 호버)
+# 개발자 노트 — PushMind 하이브리드 (RAG + 구조적 쿼리)·문서 정리
 
 ---
 
 주요 기능 추가:
 
-- **PushMind (RAG 챗봇)**
-  - **배경**: 노트·커밋 내용을 질의할 수 있는 RAG 기반 지식 챗봇. 우측 하단 플로팅 버튼으로 진입, Sheet 채팅 패널로 질문·답변·출처 제공.
-  - **구현**: 패널 열 때마다 `POST /api/pushmind/embed` 전체 동기화 자동 호출. 동기화 중 입력 비활성화 + "동기화 중..." 표시. 대화 state는 SharedAppLayout에서 보관해 페이지 이동 시에도 유지. 헤더에 슬로건 "기록이 만들어낸 또 하나의 브레인 PushMind", 환영 메시지는 "무엇을 도와드릴까요?"만 표시. 참고한 출처는 유사도 최고 1건(동률이면 모두), 노트 클릭 시 노트 페이지, 커밋 클릭 시 노트 페이지 + 커밋 시트 열림 + 해당 커밋 1초 하이라이트(`openCommit` 쿼리). [PUSHMIND-RAG.md](./PUSHMIND-RAG.md) 참고.
-- **프로필 드롭다운 만료일 앞 "~" 표시**
-  - **배경**: 상단 프로필 영역 드롭다운에서 플랜명·만료일·D-N일 표시 시, 만료일 앞에 **~** 를 붙여 "~2025.12.31 (D-30일)" 형태로 표기.
-  - **구현**: `SharedAppLayout.tsx`의 `UsageGaugesInMenu`에서 유료 플랜 만료일 문자열 앞에 `~` 추가.
-- **청구 내역 테이블 정리**
-  - **동작 컬럼 제거**: 청구 내역에서 **동작** 컬럼(헤더·열) 제거. **결제취소** 버튼은 **상태** 셀 안에만 노출(24시간 이내 건).
-  - **글자 크기·단락**: 컨테이너 크기 유지. 테이블 헤더·셀에 `text-xs` 적용해 단락 넘김 최소화. 금액·플랜·상태는 `whitespace-nowrap`으로 한 줄 유지.
-  - **승인일**: 날짜와 시간을 두 줄로 표기(날짜 한 줄, 시간 한 줄). 예: `2025. 01. 15` / `오후 2:30`.
-- **결제취소·구독 취소 버튼 호버**
-  - **요구사항**: DESIGN.md 기준 아이콘·버튼 호버 시 옅은 회색 배경.
-  - **구현**: **결제취소** 버튼(청구 내역 상태 셀), **구독 취소** 버튼(Pro 플랜 카드)에 `hover:bg-gray-100 dark:hover:bg-gray-800` 적용.
+- **PushMind 하이브리드 (RAG + 구조적 쿼리)**
+  - **배경**: 노트·커밋에 대한 질문을 의미 검색(RAG)만이 아니라 "가장 최근 커밋", "노트 몇 개", "태그에 X 있는 노트" 등 DB 직접 조회로도 답할 수 있도록 확장.
+  - **의도 분류**: 규칙 기반 `classifyIntent()` (구체적 구문만 사용, "수" 단독 제거로 "1차수" 오분류 방지). structural로 분류됐는데 패턴이 없으면 `classifyIntentWithLlm()` 호출 후 semantic이면 RAG 재시도.
+  - **구조적 쿼리**: `queryStructured()` — 최근/첫 커밋(N개), 커밋한 노트, 최근/처음 만든/오래 안 수정한 노트, 커밋 없는 노트, 연관 노트 목록, 노트/커밋 개수, 카테고리·태그·상태별 노트, 특정 노트의 최신 커밋·연관 노트 등. 구현: `src/lib/pushmindStructured.ts`. 유형 추가 시 `structuralPhrases` + 패턴 매칭·runner 함수 추가.
+  - **RAG 청크 확장**: 노트 청크에 태그·카테고리·상태·연관 노트 제목·reference_urls(최대 3)·last_commit_at, 커밋 청크에 첨부 파일명·reference_urls·created_at 포함. embed API select 확장, `related_note_ids` → 제목 조회 후 청크 반영.
+  - **출처**: structural일 때는 구조적 쿼리 결과만 출처로 표시, hybrid일 때는 structural + RAG 상위 유사도 병합·중복 제거.
+- **의도 분류·패턴 수정**
+  - "1차수"가 structural로 오분류되던 문제 → structural 구문을 구체적 구문만 사용하도록 변경.
+  - "마지막 수정한 노트", "가장 마지막에 커밋한 노트", "태그에 베트남이 있는 노트" 등 패턴·정규식 추가 및 태그 추출 정규식 수정(`태그에 X이/가 있는 노트`).
+- **문서 정리**
+  - PUSHMIND-HYBRID.md 설계 내용를 ARCHITECTURE, DATABASE, DESIGN, PRODUCT, PUSHMIND-RAG.md로 분산 기재 후 `docs/PUSHMIND-HYBRID.md` 삭제. 코드·ARCHITECTURE·docs API에서 pushmind-hybrid 참조 제거.
 
 ---
 
-UI 컴포넌트:
+UI·API:
 
-- **SharedAppLayout (`src/components/SharedAppLayout.tsx`)**
-  - `UsageGaugesInMenu`: 유료 플랜 만료일 표기 시 `~{날짜} (D-N일)` 형태로 변경.
-  - PushMind: `pushMindMessages` state 보관, `PushMindChatPanel`에 `messages`·`setMessages` props 전달.
-- **PushMindChatPanel (`src/components/PushMindChatPanel.tsx`)**
-  - 패널 열 때마다 embed 동기화 호출. 헤더에 제목·슬로건, 환영 메시지 "무엇을 도와드릴까요?". 참고한 출처(유사도 최고 1건/동률 모두), 출처 클릭 시 노트 페이지 또는 노트+커밋 시트·하이라이트.
-- **Plan 페이지 (`app/(dashboard)/plan/page.tsx`)**
-  - 청구 내역: 테이블 컬럼 승인일·금액·플랜·상태만 유지, 동작 컬럼 제거. 결제취소 버튼은 상태 셀 내부에 배치(Badge 스타일). 테이블 `text-xs`, 승인일 날짜/시간 두 줄, 결제취소·구독 취소 버튼 호버 스타일.
-  - 플랜 카드: Free 카드는 하단 버튼 없음(현재 플랜일 때만 배지). Pro/Team: 월 구독 탭·현재 플랜이면 구독 취소, 연 구독 탭이면 결제하기(연 구독 결제). 유료 사용 시 Free 카드 선택 불가. 결제 시 `doPaymentWithMethod(planId, method, billingCycle)`로 탭(월/연) 전달. 페이지 로드 시 check-expiry 호출 후 프로필 조회(만료 시 plan=free 반영).
-- **노트 상세 (`app/(dashboard)/notes/[id]/page.tsx`)**
-  - `openCommit` 쿼리 시 커밋 내역 Sheet 자동 오픈, 해당 커밋 카드 하이라이트(약 1초).
-- **결제 승인 시 만료일 계산** (`/api/payment/return`, `/api/payment/webhook`)
-  - 첫 구독 또는 만료 후 재구독: **결제일 기준** +1개월(월)/+12개월(연).
-  - 이미 같은 플랜·만료일 미래(연 구독 전환 등): **현재 만료일 기준** +1개월/+12개월.
+- **PushMindChatPanel** — 변경 없음. 의도 분류·구조적 쿼리는 chat API 내부에서 처리.
+- **`/api/pushmind/embed`** — 노트·커밋 select 확장(청크 확장 필드), `fetchRelatedNoteTitles()`로 연관 노트 제목 조회 후 청크에 반영.
+- **`/api/pushmind/chat`** — `classifyIntent` → semantic/structural/hybrid 분기. structural 시 `queryStructured()` 호출, null이면 `classifyIntentWithLlm()` 폴백. structural·hybrid 시 context에 구조적 결과 포함, 출처 병합.
 
 ---
 
 문서화:
 
-- **DESIGN.md**
-  - **프로필 드롭다운 플랜 표시**: 만료일 앞 **~** 표기(예: ~2025.12.31 (D-30일)) 문구 추가.
-  - **요금제 페이지**: 청구 내역을 승인일·금액·플랜·상태 테이블(동작 컬럼 없음), `text-xs`, 승인일 날짜/시간 두 줄, 결제취소는 상태 셀에 배치로 정리. 결제취소·구독 취소 버튼 호버(`hover:bg-gray-100`, 다크 `dark:hover:bg-gray-800`) 명시.
-  - **PushMind**: 패널 열 때마다 자동 동기화, 대화 유지(SharedAppLayout), 참고 출처·출처 클릭 동작 반영.
-- **PUSHMIND-RAG.md**, **ARCHITECTURE.md**
-  - PushMind 프론트 UX(동기화 주기, 환영/슬로건, 출처 표시·클릭), embed 호출 주기(패널 열 때마다), API 설명 반영.
+- **PUSHMIND-RAG.md** — §13 하이브리드 확장(의도 분류, 구조적 쿼리 유형 표·구현 함수·유형 추가 방법, RAG 청크 확장 요약), §10 API Route 표에 의도 분류·구조적 쿼리 반영.
+- **ARCHITECTURE.md** — pushmind/embed·chat 설명에 하이브리드(청크 확장·의도 분류·구조적 쿼리) 반영. `/api/docs/[slug]`에서 pushmind-hybrid 제거.
+- **DATABASE.md** — embeddings.content_text comment 확장, "PushMind 하이브리드에서 notes/commits 활용" 절 추가.
+- **DESIGN.md** — 홈 PushMind 문단에 의미 검색/구조적 쿼리 설명 추가.
+- **PRODUCT.md** — 사용자 흐름 하단에 PushMind 하이브리드 한 줄 추가.
 
 ---
 
 파일 구조:
 
-- `src/components/SharedAppLayout.tsx` — UsageGaugesInMenu 만료일 앞 `~` 추가. PushMind 대화 state(`pushMindMessages`) 보관.
-- `src/components/PushMindChatPanel.tsx` — 채팅 패널, 동기화·환영·출처·출처 클릭(노트/커밋 이동·하이라이트).
-- `app/(dashboard)/plan/page.tsx` — 청구 내역·플랜 카드(Free 버튼 없음, 탭별 구독 취소/결제하기, Free 선택 제한, billingCycle 전달)·check-expiry 선 호출.
-- `app/(dashboard)/notes/[id]/page.tsx` — `openCommit` 쿼리 시 커밋 시트 오픈·해당 커밋 하이라이트.
-- `app/api/pushmind/embed/route.ts`, `app/api/pushmind/chat/route.ts` — PushMind 동기화·질의 API.
-- `app/api/payment/return/route.ts`, `app/api/payment/webhook/route.ts` — 만료일 계산(첫/만료 후 = 결제일 기준, 동일 플랜 만료일 있으면 만료일 기준).
-- `docs/PLAN.md`, `docs/ARCHITECTURE.md`, `docs/DESIGN.md`, `docs/PUSHMIND-RAG.md` — 만료일 정책·Plan UI·PushMind UX·API 반영.
+- `src/lib/pushmind.ts` — `NoteForChunk`, `CommitForChunk`, `buildNoteContentText`, `buildCommitContentText`, 청크 확장. 설계 참조를 PUSHMIND-RAG.md만 사용.
+- `src/lib/pushmindStructured.ts` — `classifyIntent`, `classifyIntentWithLlm`, `queryStructured`, 구조적 쿼리 유형별 runner 함수. 설계: PUSHMIND-RAG.md §13.
+- `app/api/pushmind/embed/route.ts` — select 확장, `fetchRelatedNoteTitles`, 확장된 note/commit으로 `buildChunks`·`buildCommitChunk` 호출.
+- `app/api/pushmind/chat/route.ts` — 의도 분류·structural null 시 LLM 폴백·structural/hybrid 시 context·출처 병합.
+- `app/api/docs/[slug]/route.ts` — pushmind-hybrid slug 제거.
+- `docs/PUSHMIND-HYBRID.md` — 삭제됨.

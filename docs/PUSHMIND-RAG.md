@@ -310,8 +310,8 @@ create table if not exists public.user_llm_usage (
 
 | Method | 경로 (예) | 역할 |
 |--------|------------|------|
-| POST | `/api/pushmind/chat` | 질문 수신 → embedding 검색 → context 구성 → Chat Completions 호출 → 답변 + 출처 반환 |
-| POST | `/api/pushmind/embed` | 노트·커밋 청크 embedding 생성·갱신. **호출**: 클라이언트에서 패널 열 때마다 전체 동기화 호출. |
+| POST | `/api/pushmind/chat` | 질문 수신 → **의도 분류**(semantic/structural/hybrid) → RAG 유사도 검색 또는 구조적 쿼리(`queryStructured`) 또는 병합 → context 구성 → Chat Completions 호출 → 답변 + 출처 반환. 일일 한도 50회. |
+| POST | `/api/pushmind/embed` | 노트·커밋 청크(태그·카테고리·연관 노트 제목·첨부 파일명 등 포함) embedding 생성·갱신. **호출**: 클라이언트에서 패널 열 때마다 전체 동기화 호출. |
 
 - 인증: 모든 Route에서 Supabase Auth 확인.  
 - 비용: `user_llm_usage` 조회/갱신 및 한도 체크.
@@ -338,5 +338,54 @@ create table if not exists public.user_llm_usage (
 5. **Chat API 연동** — context 조합, Chat Completions 호출, 출처 포맷 통일.  
 6. **프론트** — 우측 하단 아이콘, 채팅 패널, 출처 링크, 유사도 표시.  
 7. **멀티 AI(선택)** — 카테고리별 system prompt 도입.
+
+---
+
+## 13. 하이브리드 확장 (RAG + 구조적 쿼리)
+
+PushMind는 **의미 검색(RAG)** 과 **구조적 쿼리(DB 직접 조회)** 를 조합한 하이브리드 방식으로 동작한다.
+
+### 13.1 의도 분류
+
+| 의도 | 처리 |
+|------|------|
+| **semantic** | RAG만 사용 (노트·커밋 내용 질의) |
+| **structural** | `queryStructured()`로 DB 직접 조회 → 결과를 context로 LLM에 전달, 출처는 structural만 |
+| **hybrid** | 구조적 쿼리 + RAG 동시 실행 → context·출처 병합 |
+
+- **규칙 기반**: `classifyIntent()` — 구체적 구문만 사용(예: "태그에", "마지막 수정한 노트").
+- **LLM 폴백**: 규칙이 structural로 분류했는데 패턴이 없을 때 `classifyIntentWithLlm()` 호출 → semantic이면 RAG로 재시도.
+
+### 13.2 구조적 쿼리 유형
+
+구현: `src/lib/pushmindStructured.ts`의 `queryStructured()`. **유형 추가 시** (1) `classifyIntent()`의 `structuralPhrases`에 구체적 구문 추가, (2) `queryStructured()` 내부에 패턴 매칭 순서와 runner 함수 추가.
+
+| 유형 | 예시 질문 | 쿼리/로직 | 구현 함수 |
+|------|-----------|-----------|-----------|
+| 특정 노트의 최신 커밋 | "노트 [제목]의 마지막 커밋" | 노트 제목 ILIKE → `commits` WHERE note_id = ? ORDER BY created_at DESC LIMIT 1 | `runLatestCommitByNoteTitle` |
+| 노트 X와 연관된 노트 | "노트 [제목]과 연관된 노트" | 노트 제목 ILIKE → 해당 노트.related_note_ids로 notes 조회 | `runRelatedNotesOfNote` |
+| 최근 커밋 N개 | "가장 마지막 커밋", "최근 커밋 5개" | `commits` ORDER BY created_at DESC LIMIT N (N 생략 시 1, 최대 20) | `runLatestCommits` |
+| 커밋한 노트 | "가장 마지막에 커밋한 노트는?" | 최신 커밋 1건 → 해당 note 정보 | `runLatestCommit` |
+| 처음/오래된 커밋 | "첫 번째 커밋", "가장 처음 커밋" | `commits` ORDER BY created_at ASC LIMIT 1 | `runFirstCommit` |
+| 최근 수정한 노트 N개 | "마지막 수정한 노트", "최근 수정한 노트 5개" | `notes` ORDER BY updated_at DESC LIMIT N (기본 1, 최대 20) | `runLatestNotes` |
+| 처음 만든 노트 N개 | "가장 처음 만든 노트", "첫 노트" | `notes` ORDER BY created_at ASC LIMIT N | `runOldestNotes` |
+| 오래 안 수정한 노트 | "오래 안 수정한 노트" | `notes` ORDER BY updated_at ASC LIMIT 10 | `runLeastRecentlyUpdatedNotes` |
+| 커밋 없는 노트 | "커밋이 없는 노트" | `notes` WHERE commit_count = 0 | `runNotesWithNoCommits` |
+| 연관 노트 있는 목록 | "연관된 노트", "연관 노트 목록" | `notes` WHERE related_note_ids IS NOT NULL 및 배열 비어있지 않음 | `runNotesWithRelated` |
+| 노트 개수 | "노트 몇 개", "노트 개수" | `notes` COUNT(*) | `runNoteCount` |
+| 커밋 개수 | "커밋 몇 개", "커밋 개수" | `commits` COUNT(*) | `runCommitCount` |
+| 상태별 노트 | "활성 상태 노트", "archived 노트" | `notes` WHERE status = X (active/archived/completed) | `runNotesByStatus` |
+| 카테고리 X인 노트 | "카테고리 업무용인 노트" | `notes` WHERE category_* ILIKE X | `runNotesByCategory` |
+| 태그 X 포함 노트 | "태그에 베트남이 있는 노트들" | `notes` WHERE tags @> ARRAY['X']. 태그 추출: `태그에 X이/가 있는 노트`, `태그 X 포함 노트` 등 | `runNotesByTag` |
+
+**패턴 매칭 순서**: 특정 노트 지정(노트 [제목]의/과 …)이 먼저 오고, 그 다음 일반 패턴(최근 커밋, 최근 노트 등). 동일 의도라도 더 구체적인 패턴을 위에 두어 오매칭을 줄인다.
+
+### 13.3 RAG 청크 확장
+
+노트 청크: `title`, `description`, 카테고리, 태그, 상태, 연관 노트 제목, reference_urls(최대 3), last_commit_at.  
+커밋 청크: `title`, `message`, 첨부 파일명, reference_urls(최대 3), created_at.  
+청크 길이 상한(예: 6000자) 유지. 데이터 소스별 활용 상세는 [DATABASE.md](./DATABASE.md)의 "PushMind 하이브리드에서 notes/commits 활용" 참고.
+
+---
 
 이 문서는 [ARCHITECTURE.md](./ARCHITECTURE.md), [DATABASE.md](./DATABASE.md)와 함께 참고하며, OpenAI API 문서(https://developers.openai.com/api/docs)는 구현 시 최신 스펙 확인용으로 사용하면 됩니다.
