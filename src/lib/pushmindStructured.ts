@@ -33,6 +33,7 @@ export function classifyIntent(question: string): Intent {
     '몇 개', '몇개', '개수', '노트 수', '커밋 수', '총 노트', '총 커밋',
     '합계', '평균', '정렬', '필터', '목록', '리스트',
     '카테고리별', '상태별', '태그별', '태그에', '태그가 있는',
+    '노트 알려줘', '노트 알려', '노트 목록', '노트 리스트',
     '활성 상태', 'archived', 'completed', '보관', '완료',
   ]
   const hasStructural = structuralPhrases.some((p) => q.includes(p))
@@ -146,6 +147,24 @@ export async function queryStructured(
   // 7. 연관된 노트가 있는 노트 목록
   if (/연관\s*(?:된\s*)?노트|연관\s*노트\s*목록/.test(q)) {
     return runNotesWithRelated(supabase, userId)
+  }
+
+  // 9-2. "[카테고리명] 노트는 몇 개" / "X 노트 몇 개" — 카테고리별 노트 개수
+  const catCountMatch = q.match(/^(.+?)\s+노트\s*(?:는|가)?\s*몇\s*개/)
+  if (catCountMatch) {
+    const prefix = catCountMatch[1].trim()
+    if (prefix.length >= 2 && !/^(가장|최근|마지막|첫|오래|총|전체)$/.test(prefix)) {
+      return runNotesByCategory(supabase, userId, prefix)
+    }
+  }
+
+  // 9-3. "[카테고리명] 노트 알려줘" — 카테고리별 노트 목록 (RAG 대신 구조적 조회로 정확한 결과)
+  const catListMatch = q.match(/^(.+?)\s+노트\s*(?:알려줘|알려\s*주|알려\s*주세요|목록|리스트|보여줘)/)
+  if (catListMatch) {
+    const prefix = catListMatch[1].trim()
+    if (prefix.length >= 2 && !/^(가장|최근|마지막|첫|오래|총|전체)$/.test(prefix)) {
+      return runNotesByCategory(supabase, userId, prefix)
+    }
   }
 
   // 10. 노트 개수
