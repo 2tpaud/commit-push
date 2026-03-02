@@ -1,4 +1,5 @@
-import type { Handler } from 'mdast-util-to-hast'
+import type { ElementContent } from 'hast'
+import type { Options as RemarkRehypeOptions } from 'remark-rehype'
 
 /** blockquote, hr, text-align 등 공통 prose 스타일 (제목·목록·인용·구분선·정렬) */
 export const proseBlockquoteHrAlign = [
@@ -25,19 +26,17 @@ export const proseBlockquoteHrAlign = [
 ].join(' ')
 
 /** remark-highlight-mark의 highlight 노드를 <mark>로 렌더링 */
-const highlightHandler: Handler = (state, node) => {
-  const result = {
-    type: 'element' as const,
-    tagName: 'mark' as const,
-    properties: {} as Record<string, unknown>,
-    children: state.all(node),
-  }
-  state.patch(node, result)
-  return state.applyData(node, result)
-}
-
-export const remarkRehypeOptions = {
+export const remarkRehypeOptions: RemarkRehypeOptions = {
   handlers: {
-    highlight: highlightHandler,
+    highlight(state, node) {
+      const result = {
+        type: 'element' as const,
+        tagName: 'mark' as const,
+        properties: {},
+        children: state.all(node),
+      }
+      state.patch(node, result)
+      return state.applyData(node, result) as ElementContent
+    },
   },
 }
