@@ -1,4 +1,4 @@
-# 개발자 노트 — 노트 상세 인라인 편집·마크다운 렌더링·UI 정리
+# 개발자 노트 — 노트 상세 인라인 편집·커밋 Sheet·마크다운 렌더링·UI 정리
 
 ---
 
@@ -16,8 +16,12 @@
   - 마크다운 렌더링: ReactMarkdown + remark-gfm, remark-highlight-mark, rehype-raw. 형광펜(`==text==`)이 `<mark>`로 표시. prose 스타일(제목·목록·인용·구분선·정렬) 적용.
 - **연관 노트**
   - **+ 버튼**: 마지막 연관 노트 밑(또는 "연관 노트가 없습니다" 밑)에 위치, 호버 시 표시. 클릭 시 `RelatedNoteSearchDialog` 열림(다중 선택).
-- **커밋 내역 Sheet 유지**
-  - 사이드바·최근 항목(`data-keep-sheet-open`) 클릭 시 `onInteractOutside`에서 `preventDefault`로 시트 유지. 다른 노트로 이동해도 시트는 열린 채 유지.
+- **커밋 내역 Sheet**
+  - **유지**: 사이드바·최근 항목(`data-keep-sheet-open`) 클릭 시 `onInteractOutside`에서 `preventDefault`로 시트 유지. 다른 노트로 이동해도 시트는 열린 채 유지.
+  - **헤더 아이콘**: 확대/축소(ChevronLeft·ChevronRight), **커밋 추가**(Plus, CommitPushDialog 열림), **트리 뷰**(FolderTree), **목록 뷰**(List), 정렬(ArrowUp/ArrowDown), 닫기(X). 선택된 뷰 모드는 `opacity-100 text-[#1F2A44]`, 비선택은 `opacity-70 hover:opacity-100`.
+  - **트리 뷰**: 년 > 월 계층 구조. `sortOrder`(asc/desc)에 따라 년·월 순서 결정.
+  - **목록 뷰**: 평면 커밋 카드 목록.
+  - **커밋 카드 클릭 시 편집**: 트리/목록 뷰 공통. 카드 컨테이너(`button`) 클릭 시 `setEditingCommitId(commit.id)` + `setShowCommitPushDialog(true)`로 해당 커밋 편집(CommitPushDialog). 호버 시 `hover:bg-gray-100`, Edit 아이콘 `group-hover/card:opacity-70`. 첨부파일 링크는 `onClick stopPropagation`으로 카드 클릭 전파 차단. 강조된 커밋(`?openCommit=id` 등)은 `border-[#1F2A44] bg-[#1F2A44]/10 ring-2 ring-[#1F2A44]`.
 - **새 노트 다이얼로그 카테고리 자동완성**
   - 대·중·소분류 드롭다운 선택 항목 하이라이트를 시그니처 컬러(`bg-[#1F2A44] text-white`)에서 옅은 회색(`bg-gray-100`)으로 변경.
 - **노트 선택·연관 노트 검색 다이얼로그**
@@ -28,7 +32,7 @@
 
 UI·API:
 
-- **노트 상세 페이지** (`app/(dashboard)/notes/[id]/page.tsx`) — 속성 인라인 편집(생성일·tags·참고URL·상태), 설명 RichTextEditor·resize-y, 연관 노트 + 버튼·RelatedNoteSearchDialog, 커밋 Sheet `onInteractOutside` 처리.
+- **노트 상세 페이지** (`app/(dashboard)/notes/[id]/page.tsx`) — 속성 인라인 편집(생성일·tags·참고URL·상태), 설명 RichTextEditor·resize-y, 연관 노트 + 버튼·RelatedNoteSearchDialog, 커밋 Sheet(트리/목록 뷰, 커밋 추가·정렬 아이콘, `onInteractOutside` 처리).
 - **NewNoteDialog** — 카테고리(대·중·소분류) 자동완성 드롭다운 선택 항목 `bg-gray-100`.
 - **NoteSelectDialog** — 커밋푸시용 단일 노트 선택. RelatedNoteSearchDialog와 동일한 테이블·"총 N개 노트" UI.
 - **RelatedNoteSearchDialog** — 연관 노트 다중 선택. `min-h-[320px]`, "총 N개 노트" 표시.
@@ -44,7 +48,7 @@ UI·API:
 
 파일 구조:
 
-- `app/(dashboard)/notes/[id]/page.tsx` — 속성 인라인 편집, 설명 RichTextEditor·resize-y, ReactMarkdown·remark-gfm·remark-highlight-mark·rehype-raw, 연관 노트 + 버튼·RelatedNoteSearchDialog, Sheet onInteractOutside.
+- `app/(dashboard)/notes/[id]/page.tsx` — 속성 인라인 편집, 설명 RichTextEditor·resize-y, ReactMarkdown·remark-gfm·remark-highlight-mark·rehype-raw, 연관 노트 + 버튼·RelatedNoteSearchDialog, 커밋 Sheet(트리/목록 뷰, 커밋 추가·정렬 아이콘, onInteractOutside).
 - `src/components/NewNoteDialog.tsx` — 대·중·소분류 드롭다운 선택 항목 `bg-gray-100`.
 - `src/components/NoteSelectDialog.tsx` — "총 N개 노트", `min-h-[320px]` 테이블.
 - `src/components/RelatedNoteSearchDialog.tsx` — 다중 선택, 동일 UI.
