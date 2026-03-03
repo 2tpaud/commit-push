@@ -1,32 +1,14 @@
 import { NextResponse } from 'next/server'
-import crypto from 'crypto'
 import { createClient } from '@supabase/supabase-js'
 import { createServerSupabase } from '@/lib/supabaseServer'
 
 const NICEPAY_API_BASE = process.env.NICE_PAY_API_BASE ?? 'https://sandbox-api.nicepay.co.kr'
-const NICEPAY_CANCEL_API_URL = process.env.NICE_PAY_CANCEL_API_URL
 const clientId = process.env.NEXT_PUBLIC_NICE_PAY_CLIENT_ID
 const secretKey = process.env.NICE_PAY_SECRET_KEY
-/** 취소 API(cancel_process.jsp) 서명용. 없으면 secretKey 사용(테스트/일부 환경). 실결제에서 '가맹점키 조회 오류' 시 나이스페이에서 가맹점키 발급 후 설정. */
-const merchantKey = process.env.NICE_PAY_MERCHANT_KEY ?? secretKey
-const mid = process.env.NICE_PAY_MID ?? process.env.NEXT_PUBLIC_NICE_PAY_CLIENT_ID
 
 type CancelBody = {
   paymentId?: string
   reason?: string
-}
-
-function getEdiDate(): string {
-  const now = new Date()
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return [
-    now.getFullYear(),
-    pad(now.getMonth() + 1),
-    pad(now.getDate()),
-    pad(now.getHours()),
-    pad(now.getMinutes()),
-    pad(now.getSeconds()),
-  ].join('')
 }
 
 function isWithin24Hours(paidAt: string | null): boolean {
@@ -36,15 +18,25 @@ function isWithin24Hours(paidAt: string | null): boolean {
   return Date.now() - paid.getTime() <= 24 * 60 * 60 * 1000
 }
 
+function getBasicAuth(): string {
+  if (!clientId || !secretKey) {
+    throw new Error('Missing NicePay keys')
+  }
+  const credentials = `${clientId}:${secretKey}`
+  return Buffer.from(credentials, 'utf8').toString('base64')
+}
+
 export async function POST(request: Request) {
   const body = (await request.json().catch(() => ({}))) as CancelBody
   const paymentId = String(body.paymentId ?? '').trim()
-  const reason = String(body.reason ?? 'user_requested_cancel').trim().slice(0, 100) || 'user_requested_cancel'
+  const reason =
+    String(body.reason ?? 'user_requested_cancel').trim().slice(0, 100) ||
+    'user_requested_cancel'
 
   if (!paymentId) {
     return NextResponse.json({ error: 'invalid_request' }, { status: 400 })
   }
-  if (!mid || !secretKey || !clientId) {
+  if (!clientId || !secretKey) {
     return NextResponse.json({ error: 'config_error' }, { status: 500 })
   }
 
@@ -55,13 +47,19 @@ export async function POST(request: Request) {
   if (!user) {
     const authHeader = request.headers.get('Authorization')
     const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null
-    if (token && process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+    if (
+      token &&
+      process.env.NEXT_PUBLIC_SUPABASE_URL &&
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    ) {
       const client = createClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL,
         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
         { global: { headers: { Authorization: `Bearer ${token}` } } }
       )
-      const { data: { user: u } } = await client.auth.getUser()
+      const {
+        data: { user: u },
+      } = await client.auth.getUser()
       if (u) {
         user = u
         supabase = client
@@ -98,66 +96,49 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'missing_tid' }, { status: 400 })
   }
 
-  const ediDate = getEdiDate()
-  const cancelAmt = String(payment.amount)
-  // cancel_process.jsp 서명: SignData = sha256(MID + CancelAmt + EdiDate + MerchantKey). 가맹점키 없으면 secretKey로 시도.
-  const signData = crypto.createHash('sha256').update(`${mid}${cancelAmt}${ediDate}${merchantKey}`, 'utf8').digest('hex')
-  const cancelUrl =
-    NICEPAY_CANCEL_API_URL ??
-    (NICEPAY_API_BASE.includes('api.nicepay.co.kr')
-      ? 'https://dc1-api.nicepay.co.kr/webapi/cancel_process.jsp'
-      : `${NICEPAY_API_BASE.replace(/\/$/, '')}/webapi/cancel_process.jsp`)
-
-  const form = new URLSearchParams({
-    TID: payment.tid,
-    MID: mid,
-    Moid: payment.order_id,
-    CancelAmt: cancelAmt,
-    CancelMsg: reason,
-    PartialCancelCode: '0',
-    EdiDate: ediDate,
-    SignData: signData,
-    CharSet: 'utf-8',
-    EdiType: 'JSON',
-  })
+  // NicePay REST 결제 취소 (v1/payments/{tid}/cancel, Basic 인증)
+  const cancelUrl = `${NICEPAY_API_BASE.replace(/\/$/, '')}/v1/payments/${payment.tid}/cancel`
 
   const cancelRes = await fetch(cancelUrl, {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      Authorization: `Basic ${Buffer.from(`${clientId}:${secretKey}`, 'utf8').toString('base64')}`,
+      'Content-Type': 'application/json',
+      Authorization: `Basic ${getBasicAuth()}`,
     },
-    body: form.toString(),
+    body: JSON.stringify({
+      amount: payment.amount,
+      reason,
+    }),
   })
 
-  const text = await cancelRes.text()
-  let payload: Record<string, unknown> = {}
-  try {
-    payload = JSON.parse(text) as Record<string, unknown>
-  } catch {
-    payload = Object.fromEntries(new URLSearchParams(text))
+  const raw = (await cancelRes.json().catch(() => ({}))) as Record<string, unknown>
+  const result = (raw?.result != null ? raw.result : raw) as {
+    resultCode?: string | number
+    status?: string
+    cancelledAt?: string | number | null
   }
 
-  const code = String(payload.ResultCode ?? payload.resultCode ?? payload.resultCd ?? '')
-  const resultMsg = String(payload.ResultMsg ?? payload.resultMsg ?? payload.resultCd ?? '결제 취소에 실패했습니다.')
-  const ok = code === '2001' || code === '0000'
+  const resultCode = String(result?.resultCode ?? '')
+  const ok = resultCode === '0000'
+
   if (!ok) {
     console.error('[payment/cancel] pg_cancel_failed', {
       paymentId,
-      code,
-      resultMsg: payload.ResultMsg ?? payload.resultMsg,
+      tid: payment.tid,
+      resultCode,
       resStatus: cancelRes.status,
-      payload,
+      payload: raw,
     })
-    const isMerchantKeyError = code === 'A301' || /가맹점키|상점키/.test(resultMsg)
+
+    if (cancelRes.status === 401) {
+      return NextResponse.json({ error: 'nicepay_auth' }, { status: 401 })
+    }
+
     return NextResponse.json(
       {
         error: 'cancel_failed',
-        resultMsg,
-        ...(isMerchantKeyError && {
-          hint: '취소 API는 레거시(cancel_process.jsp) 전용이라 서명에 가맹점키(MerchantKey)가 필요합니다. 나이스페이에서 가맹점키를 발급받아 NICE_PAY_MERCHANT_KEY 환경변수로 설정하세요.',
-        }),
-        pgResult: payload,
+        resultCode,
+        pgResult: raw,
       },
       { status: 400 }
     )
@@ -188,7 +169,8 @@ export async function POST(request: Request) {
   }
 
   try {
-    const planLabel = payment.amount === 67200 || payment.amount === 7000 ? 'Team' : 'Pro'
+    const planLabel =
+      payment.amount === 67200 || payment.amount === 7000 ? 'Team' : 'Pro'
     await supabase.from('notifications').insert({
       user_id: user.id,
       type: 'payment_cancelled',

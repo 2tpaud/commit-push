@@ -1,63 +1,71 @@
-# 개발자 노트 — 노트 상세 인라인 편집·커밋 Sheet·마크다운 렌더링·UI 정리
+# 개발자 노트 2 — NicePay REST 전환·결제 문서 최신화
 
 ---
 
 주요 기능 추가:
 
-- **노트 상세 페이지 속성 인라인 편집**
-  - **생성일, tags, 참고URL, 상태**: 마우스 호버 시 옅은 회색 배경(`hover:bg-gray-100`), 클릭 시 수정 모드. 편집 중에는 호버 효과 없음.
-  - **생성일**: `datetime-local` 입력, Enter/blur 시 저장.
-  - **tags**: 콤마(,)로 여러 태그 입력, Enter 저장, 바깥 클릭 시 취소. 저장/취소 버튼 없음. 입력창 `min-w-[400px]`.
-  - **참고URL**: URL 입력 후 Enter 저장, 바깥 클릭 시 취소. 저장/취소 버튼 없음. 입력창 `min-w-[400px]`.
-  - **상태**: DropdownMenu로 선택(활성화/보관/완료). 선택 항목은 호버 시 옅은 회색만 적용(시그니처 컬러 하이라이트 없음).
-  - **속성 간격**: `mb-4` → `mb-2`로 축소.
-- **설명 영역 인라인 편집**
-  - 클릭 시 RichTextEditor + `resize-y` 드래그로 높이 조절(`min-h-[120px]`, `max-h-[400px]`). 저장/취소 버튼으로 완료.
-  - 마크다운 렌더링: ReactMarkdown + remark-gfm, remark-highlight-mark, rehype-raw. 형광펜(`==text==`)이 `<mark>`로 표시. prose 스타일(제목·목록·인용·구분선·정렬) 적용.
-- **연관 노트**
-  - **+ 버튼**: 마지막 연관 노트 밑(또는 "연관 노트가 없습니다" 밑)에 위치, 호버 시 표시. 클릭 시 `RelatedNoteSearchDialog` 열림(다중 선택).
-- **커밋 내역 Sheet**
-  - **유지**: 사이드바·최근 항목(`data-keep-sheet-open`) 클릭 시 `onInteractOutside`에서 `preventDefault`로 시트 유지. 다른 노트로 이동해도 시트는 열린 채 유지.
-  - **헤더 아이콘**: 확대/축소(ChevronLeft·ChevronRight), **커밋 추가**(Plus, CommitPushDialog 열림), **트리 뷰**(FolderTree), **목록 뷰**(List), 정렬(ArrowUp/ArrowDown), 닫기(X). 선택된 뷰 모드는 `opacity-100 text-[#1F2A44]`, 비선택은 `opacity-70 hover:opacity-100`.
-  - **트리 뷰**: 년 > 월 계층 구조. `sortOrder`(asc/desc)에 따라 년·월 순서 결정.
-  - **목록 뷰**: 평면 커밋 카드 목록.
-  - **커밋 카드 클릭 시 편집**: 트리/목록 뷰 공통. 카드 컨테이너(`button`) 클릭 시 `setEditingCommitId(commit.id)` + `setShowCommitPushDialog(true)`로 해당 커밋 편집(CommitPushDialog). 호버 시 `hover:bg-gray-100`, Edit 아이콘 `group-hover/card:opacity-70`. 첨부파일 링크는 `onClick stopPropagation`으로 카드 클릭 전파 차단. 강조된 커밋(`?openCommit=id` 등)은 `border-[#1F2A44] bg-[#1F2A44]/10 ring-2 ring-[#1F2A44]`.
-- **새 노트 다이얼로그 카테고리 자동완성**
-  - 대·중·소분류 드롭다운 선택 항목 하이라이트를 시그니처 컬러(`bg-[#1F2A44] text-white`)에서 옅은 회색(`bg-gray-100`)으로 변경.
-- **노트 선택·연관 노트 검색 다이얼로그**
-  - `NoteSelectDialog`(커밋푸시용): RelatedNoteSearchDialog와 동일한 UI — "총 N개 노트" 표시, `min-h-[320px]` 테이블 영역.
-  - `RelatedNoteSearchDialog`: 다중 선택, 동일 스타일 적용.
+- **결제 승인 API (`POST /api/payment/return`) REST 전용 통일**
+  - 나이스페이 승인 호출을 **항상** `POST {NICE_PAY_API_BASE}/v1/payments/{tid}` + `Authorization: Basic base64(clientId:secretKey)`로만 수행.
+  - `resultCode === "0000"`, `amount` 일치, `status === "paid"` 또는 `paidAt` 존재일 때만 승인으로 간주.
+  - 기존 로직(주문 조회, 중복 결제 우회, 금액 검증, 플랜 연장, `payments.status='paid'`, `notifications.payment_approved`)은 그대로 유지.
+- **결제 취소 API (`POST /api/payment/cancel`) REST 전용 통일**
+  - 레거시 `cancel_process.jsp` + MID/MerchantKey/SignData/EdiDate 서명 제거.
+  - 항상 `POST {NICE_PAY_API_BASE}/v1/payments/{tid}/cancel` + Basic 인증, body `{ amount, reason }` 사용.
+  - `resultCode === "0000"`일 때만 성공 처리, 401 → `nicepay_auth`, 그 외 → `cancel_failed`.
+- **레거시 NicePay 의존성 제거**
+  - 코드·문서에서 `pay_process.jsp`, `cancel_process.jsp`, `MID`, `MerchantKey`, `SignData`, `EdiDate`, `NICE_PAY_MID`, `NICE_PAY_MERCHANT_KEY`, `NICE_PAY_CANCEL_API_URL` 전부 제거.
+- **문서 최신화**
+  - `ARCHITECTURE.md`, `PLAN.md`, `PAYMENT-TEST-CHECKLIST.md`를 REST + Basic 인증 기준으로 업데이트.
 
 ---
 
 UI·API:
 
-- **노트 상세 페이지** (`app/(dashboard)/notes/[id]/page.tsx`) — 속성 인라인 편집(생성일·tags·참고URL·상태), 설명 RichTextEditor·resize-y, 연관 노트 + 버튼·RelatedNoteSearchDialog, 커밋 Sheet(트리/목록 뷰, 커밋 추가·정렬 아이콘, `onInteractOutside` 처리).
-- **NewNoteDialog** — 카테고리(대·중·소분류) 자동완성 드롭다운 선택 항목 `bg-gray-100`.
-- **NoteSelectDialog** — 커밋푸시용 단일 노트 선택. RelatedNoteSearchDialog와 동일한 테이블·"총 N개 노트" UI.
-- **RelatedNoteSearchDialog** — 연관 노트 다중 선택. `min-h-[320px]`, "총 N개 노트" 표시.
-- **RichTextEditor** — `fixMarkdownInsideMarkTags`로 `<mark>` 내부 마크다운(**, *** 등) HTML 변환. 저장 시 `<mark>**text**</mark>` 형태 로드 시 정상 표시.
+- **결제 승인 API** (`app/api/payment/return/route.ts`)
+  - 입력: 나이스페이 returnUrl 콜백(POST), `authResultCode`, `authResultMsg`, `tid`, `orderId`, `amount`.
+  - 처리:
+    - `authResultCode !== "0000"` 또는 메시지에 “취소/실패” 포함 → `/plan?error=cancelled`.
+    - `order_id`로 `payments` 조회, 금액·상태 검증, `status='paid'`면 중복 승인 없이 성공 처리.
+    - 승인 호출: `POST {NICE_PAY_API_BASE}/v1/payments/{tid}` + Basic, `{ amount: payment.amount }`.
+    - 응답 검증 후 `users.plan`·`plan_expires_at` 연장, `payments.status='paid'`, `tid`, `paid_at`, `notifications.payment_approved` 삽입.
+    - 실패 시 `payments.status='failed'`로 업데이트, 401이면 `/plan?error=nicepay_auth`, 그 외 `/plan?error=approval_failed`.
+- **결제 취소 API** (`app/api/payment/cancel/route.ts`)
+  - 입력: `paymentId`, `reason` (JSON), 인증은 Supabase 세션(쿠키) 우선, 없으면 Authorization: Bearer.
+  - 처리:
+    - `payments`에서 해당 결제 조회, 소유자(`payments.user_id === user.id`) 및 상태(`status='paid'`), 24시간 이내(`paid_at`) 검증, `tid` 필수.
+    - 취소 호출: `POST {NICE_PAY_API_BASE}/v1/payments/{tid}/cancel` + Basic, `{ amount, reason }`.
+    - `resultCode !== "0000"` → 로그 남기고 HTTP 401이면 `nicepay_auth`, 그 외 `cancel_failed` 리턴.
+    - 성공 시 `payments.status='cancelled'`, `users.plan='free'`, `plan_expires_at=null`, `notifications.payment_cancelled` 삽입.
+- **환경 변수**
+  - 사용: `NEXT_PUBLIC_NICE_PAY_CLIENT_ID`, `NICE_PAY_SECRET_KEY`, `NICE_PAY_API_BASE`, `NEXT_PUBLIC_NICE_PAY_SDK_URL`, `SUPABASE_SERVICE_ROLE_KEY`.
+  - 미사용(삭제 대상): `NICE_PAY_MID`, `NICE_PAY_MERCHANT_KEY`, `NICE_PAY_CANCEL_API_URL` 및 레거시 JSP 전용 값.
 
 ---
 
 문서화:
 
-- **DESIGN.md** — 노트 상세 속성 인라인 편집·설명·연관 노트 + 버튼, 자동완성 드롭다운 스타일(카테고리 옅은 회색/기타 시그니처 컬러), NewNoteDialog 카테고리 하이라이트, 향후 작업 참고사항 §6 반영.
+- **ARCHITECTURE.md**
+  - `/api/payment/return`, `/api/payment/cancel` 설명을 REST v1 + Basic 인증 한 가지 경로로만 서술.
+  - 승인/취소 성공 조건, 오류 코드(`nicepay_auth`, `approval_failed`, `cancel_failed`)를 현재 구현 기준으로 정리.
+  - 레거시 pay_process/cancel_process + MID/MerchantKey/SignData/EdiDate 관련 문구 삭제.
+- **PLAN.md**
+  - 5.1 환경 변수에서 MID/MERCHANT_KEY/CANCEL_API_URL 제거, REST용 env만 남김.
+  - 5.2: 승인 경로를 `POST {NICE_PAY_API_BASE}/v1/payments/{tid}` + Basic 한 가지로 명시.
+  - 5.3: 취소 경로를 `POST {NICE_PAY_API_BASE}/v1/payments/{tid}/cancel` + Basic, `resultCode='0000'` 기준으로 설명.
+- **PAYMENT-TEST-CHECKLIST.md**
+  - 사전 준비에서 MID/MerchantKey 제거, REST용 env만 체크.
+  - 취소 테스트를 “REST 취소 API `resultCode='0000'` 기준으로 `payments.status='cancelled'`”로 정리, 가맹점키/서명 관련 내용 삭제.
+- **DESIGN.md / DATABASE.md / PRODUCT.md / PUSHMIND-RAG.md**
+  - 결제 레이어 의존성이 없는 부분(제품 개념, RAG, DB 구조 등)은 현 상태 유지.
 
 ---
 
 파일 구조:
 
-- `app/(dashboard)/notes/[id]/page.tsx` — 속성 인라인 편집, 설명 RichTextEditor·resize-y, ReactMarkdown·remark-gfm·remark-highlight-mark·rehype-raw, 연관 노트 + 버튼·RelatedNoteSearchDialog, 커밋 Sheet(트리/목록 뷰, 커밋 추가·정렬 아이콘, onInteractOutside).
-- `src/components/NewNoteDialog.tsx` — 대·중·소분류 드롭다운 선택 항목 `bg-gray-100`.
-- `src/components/NoteSelectDialog.tsx` — "총 N개 노트", `min-h-[320px]` 테이블.
-- `src/components/RelatedNoteSearchDialog.tsx` — 다중 선택, 동일 UI.
-- `src/components/CommitPushDialog.tsx` — NoteSelectDialog 사용.
-- `src/components/RichTextEditor.tsx` — `fixMarkdownInsideMarkTags` 적용.
-- `src/lib/markdownInMark.ts` — `<mark>` 태그 안 마크다운(**, *** 등) HTML 변환.
-- `src/lib/markdownProse.ts` — prose 스타일(blockquote·hr·정렬·제목·목록), remark-highlight-mark의 highlight → `<mark>` 핸들러.
-- `src/lib/markdownRender.ts` — remark-rehype highlight → mark 변환 옵션(remarkProse와 중복 가능, 노트 상세는 markdownProse 사용).
-- `src/extensions/HighlightWithColor.ts` — TipTap 형광펜 색상 마크다운 저장(`<mark data-color="..." style="...">`).
-- `src/components/AppSidebar.tsx` — `data-keep-sheet-open` 속성.
-- **package.json** — react-markdown, rehype-raw, remark-gfm, remark-highlight-mark 추가.
-- `docs/DESIGN.md` — 노트 상세·자동완성·NewNoteDialog 스타일 최신화.
+- `app/api/payment/return/route.ts` — NicePay returnUrl 처리, REST 승인 API 호출, `users`·`payments`·`notifications` 갱신.
+- `app/api/payment/cancel/route.ts` — Plan 페이지에서 24시간 이내 결제 취소 처리, REST 취소 API 호출.
+- `app/api/payment/webhook/route.ts` — 나이스페이 웹훅(승인/취소 이벤트) 처리, 승인/취소 멱등 반영.
+- `app/(dashboard)/plan/page.tsx` — 요금제/결제 UI, 결제하기/결제취소 버튼, 청구 내역 테이블.
+- `docs/ARCHITECTURE.md` — API 레이어·환경 변수 구조 최신화(REST 기준).
+- `docs/PLAN.md` — 플랜/결제 흐름·env·승인/취소 API 설명 최신화(REST 기준).
+- `docs/PAYMENT-TEST-CHECKLIST.md` — 결제/취소 테스트 체크리스트 REST 기준으로 정리.
