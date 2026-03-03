@@ -16,7 +16,17 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible'
-import { ChevronRight, ChevronDown, ChevronUp, FileText, Search, LayoutDashboard, ScrollText, BookOpen } from 'lucide-react'
+import {
+  ChevronRight,
+  ChevronDown,
+  ChevronUp,
+  FileText,
+  Search,
+  LayoutDashboard,
+  ScrollText,
+  BookOpen,
+  MessageSquare,
+} from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { getRecentOpenedMap } from '@/lib/sidebarRecentOpened'
@@ -57,7 +67,15 @@ function buildCategoryTree(notes: Note[]) {
   return tree
 }
 
-export default function AppSidebar({ userId }: { userId: string }) {
+export default function AppSidebar({
+  userId,
+  userRole,
+  onOpenPushMind,
+}: {
+  userId: string
+  userRole?: string | null
+  onOpenPushMind?: () => void
+}) {
   const router = useRouter()
   const [notes, setNotes] = useState<Note[]>([])
   const [loading, setLoading] = useState(true)
@@ -110,8 +128,10 @@ export default function AppSidebar({ userId }: { userId: string }) {
   /** 작업 로그·개발자 노트 페이지 프리페치로 이동 시 버벅임 완화 */
   useEffect(() => {
     router.prefetch('/activity')
-    router.prefetch('/developer-notes')
-  }, [router])
+    if (userRole === 'admin' || userRole === 'owner') {
+      router.prefetch('/developer-notes')
+    }
+  }, [router, userRole])
 
   const [notesRefreshTrigger, setNotesRefreshTrigger] = useState(0)
   useEffect(() => {
@@ -303,17 +323,32 @@ export default function AppSidebar({ userId }: { userId: string }) {
           </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
-              <Link
-                href="/developer-notes"
+              <button
+                type="button"
+                onClick={() => onOpenPushMind?.()}
                 className={cn(iconButtonClass)}
-                aria-label="개발자 노트"
-                prefetch
+                aria-label="PushMind"
               >
-                <BookOpen className="h-4 w-4" />
-              </Link>
+                <MessageSquare className="h-4 w-4" />
+              </button>
             </TooltipTrigger>
-            <TooltipContent>개발자 노트</TooltipContent>
+            <TooltipContent>PushMind</TooltipContent>
           </Tooltip>
+          {(userRole === 'admin' || userRole === 'owner') && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Link
+                  href="/developer-notes"
+                  className={cn(iconButtonClass)}
+                  aria-label="개발자 노트"
+                  prefetch
+                >
+                  <BookOpen className="h-4 w-4" />
+                </Link>
+              </TooltipTrigger>
+              <TooltipContent>개발자 노트</TooltipContent>
+            </Tooltip>
+          )}
         </div>
 
         {/* 메인 영역: 트리 / 검색 / 대시보드 */}

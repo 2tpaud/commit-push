@@ -1,4 +1,4 @@
-# 개발자 노트 — NicePay REST 전환·결제 문서 최신화
+# 개발자 노트 — NicePay REST 전환·결제 문서·플랜/개발자 노트·PushMind UI 정리
 
 ---
 
@@ -16,6 +16,12 @@
   - 코드·문서에서 `pay_process.jsp`, `cancel_process.jsp`, `MID`, `MerchantKey`, `SignData`, `EdiDate`, `NICE_PAY_MID`, `NICE_PAY_MERCHANT_KEY`, `NICE_PAY_CANCEL_API_URL` 전부 제거.
 - **문서 최신화**
   - `ARCHITECTURE.md`, `PLAN.md`, `PAYMENT-TEST-CHECKLIST.md`를 REST + Basic 인증 기준으로 업데이트.
+ - **Plan 페이지 월/연 탭·배지 UX 정리**
+   - Pro/Team **월 구독**이 현재 플랜일 때만 해당 카드 상단에 "현재 플랜" 배지를 표시하고, 연 구독 탭에서는 배지를 숨긴 채 연 결제 버튼만 노출.
+ - **개발자 노트 권한(admin/owner) 제한 및 아이콘 제어**
+   - `users.role`이 `admin` 또는 `owner`인 경우에만 사이드바 상단 BookOpen(개발자 노트) 아이콘과 `/developer-notes` 페이지 접근 허용.
+ - **사이드바 PushMind 아이콘 추가**
+   - 사이드바 상단에 MessageSquare(PushMind) 아이콘을 추가해, 좌측에서 바로 PushMind 챗 패널을 열 수 있도록 함.
 
 ---
 
@@ -39,6 +45,18 @@ UI·API:
 - **환경 변수**
   - 사용: `NEXT_PUBLIC_NICE_PAY_CLIENT_ID`, `NICE_PAY_SECRET_KEY`, `NICE_PAY_API_BASE`, `NEXT_PUBLIC_NICE_PAY_SDK_URL`, `SUPABASE_SERVICE_ROLE_KEY`.
   - 미사용(삭제 대상): `NICE_PAY_MID`, `NICE_PAY_MERCHANT_KEY`, `NICE_PAY_CANCEL_API_URL` 및 레거시 JSP 전용 값.
+- **Plan 페이지 월/연 탭·배지** (`app/(dashboard)/plan/page.tsx`)
+  - `billingCycle`(월/연 탭 상태)에 따라 가격 표시와 버튼/배지 동작 분리.
+  - `currentPlan === planId`이고 유료 플랜(Pro/Team)이며 만료되지 않은 경우:
+    - 월 탭: 카드 상단에 "현재 플랜" 배지 + 하단에 "구독 취소" 버튼.
+    - 연 탭: 배지는 숨기고 하단에 "결제하기"(연 결제) 버튼만 노출.
+- **개발자 노트 권한 제어** (`app/(dashboard)/developer-notes/page.tsx`, `src/components/AppSidebar.tsx`, `src/components/SharedAppLayout.tsx`)
+  - `SharedAppLayout`에서 `users.role`을 함께 로드해 프로필에 포함.
+  - `AppSidebar`에 `userRole`을 전달해, `role === 'admin'` 또는 `role === 'owner'`일 때만 개발자 노트(BookOpen) 아이콘과 `/developer-notes` prefetch 표시.
+  - `developer-notes` 페이지 진입 시에도 `role`을 조회해 admin/owner가 아니면 노트 목록/작성 UI 대신 접근 제한 메시지 렌더링.
+- **사이드바 PushMind 아이콘** (`src/components/AppSidebar.tsx`, `src/components/SharedAppLayout.tsx`)
+  - `AppSidebar` 상단 아이콘 행에 MessageSquare 버튼 추가, 클릭 시 상위에서 내려준 `onOpenPushMind` 콜백 호출.
+  - `SharedAppLayout`에서 기존 `showPushMindChat` 상태를 유지하면서 `onOpenPushMind={() => setShowPushMindChat(true)}`를 전달해 PushMind 시트를 열도록 연결.
 
 ---
 
@@ -69,3 +87,6 @@ UI·API:
 - `docs/ARCHITECTURE.md` — API 레이어·환경 변수 구조 최신화(REST 기준).
 - `docs/PLAN.md` — 플랜/결제 흐름·env·승인/취소 API 설명 최신화(REST 기준).
 - `docs/PAYMENT-TEST-CHECKLIST.md` — 결제/취소 테스트 체크리스트 REST 기준으로 정리.
+ - `src/components/AppSidebar.tsx` — 사이드바 상단 아이콘 행(PushMind(MessageSquare), 개발자 노트(BookOpen)), 대분류·중분류·소분류 트리, 최근 항목.
+ - `src/components/SharedAppLayout.tsx` — 헤더(커밋푸시/새 노트/알림/프로필), 사이드바, PushMind 패널 상태 관리(`showPushMindChat`), 프로필(`users.role` 포함) 로딩.
+ - `app/(dashboard)/developer-notes/page.tsx` — 개발자 노트 목록/작성/조회/삭제 UI, `users.role` 기반 접근 제어(admin/owner 전용).

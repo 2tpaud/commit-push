@@ -119,6 +119,7 @@ export default function DeveloperNotesPage() {
   const user = useAuthUser()
   const [loading, setLoading] = useState(true)
   const showSkeleton = useSkeletonTiming(loading)
+  const [isAllowed, setIsAllowed] = useState<boolean | null>(null)
   const [notes, setNotes] = useState<DeveloperNote[]>([])
   const [showDialog, setShowDialog] = useState(false)
   const [showViewDialog, setShowViewDialog] = useState(false)
@@ -134,8 +135,39 @@ export default function DeveloperNotesPage() {
   const [activeTab, setActiveTab] = useState('notes')
 
   useEffect(() => {
-    if (!user) return
-    loadNotes(user.id).finally(() => setLoading(false))
+    const init = async () => {
+      if (!user) {
+        setIsAllowed(false)
+        setLoading(false)
+        return
+      }
+
+      try {
+        const { data: profile, error } = await supabase
+          .from('users')
+          .select('role')
+          .eq('id', user.id)
+          .single()
+
+        if (error) {
+          console.error('Error loading user profile for developer-notes:', error)
+        }
+
+        const role = (profile?.role ?? 'user') as string
+        const allowed = role === 'admin' || role === 'owner'
+        setIsAllowed(allowed)
+
+        if (!allowed) {
+          return
+        }
+
+        await loadNotes(user.id)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    void init()
   }, [user])
 
   const loadNotes = async (userId: string) => {
@@ -440,6 +472,14 @@ export default function DeveloperNotesPage() {
 
   if (!user) {
     return null
+  }
+
+  if (isAllowed === false) {
+    return (
+      <div className="px-4 py-8 text-center text-muted-foreground">
+        이 페이지는 관리자만 접근할 수 있습니다.
+      </div>
+    )
   }
 
   return (

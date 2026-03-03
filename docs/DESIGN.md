@@ -46,7 +46,8 @@
   - **Search**: 제목·태그 검색 뷰
   - **LayoutDashboard**: 대시보드 메뉴(준비 중)
   - **ScrollText**: 작업 로그 (`/activity`) 링크, `prefetch` 적용
-  - **BookOpen**: 개발자 노트 (`/developer-notes`) 링크, `prefetch` 적용
+  - **MessageSquare**: PushMind 패널 열기. 사이드바에서 바로 PushMind 챗을 띄움.
+  - **BookOpen**: 개발자 노트 (`/developer-notes`) 링크, `prefetch` 적용 — `users.role`이 `admin` 또는 `owner`일 때만 표시
   - (요금제 `/plan` 등 추가 링크는 헤더/사이드바에서 필요 시 동일 방식으로 추가)
 - **메인 영역** (비율 4/5):
   - **파일 뷰**: 고정 라벨 "워크 스페이스" + 대분류 > 중분류 > 소분류 트리 (Collapsible, 노트 개수 표시)

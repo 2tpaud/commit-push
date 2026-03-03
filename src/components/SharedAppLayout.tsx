@@ -40,6 +40,7 @@ interface UserProfile {
   plan: string | null
   plan_expires_at: string | null
   pushmind_request_count: number
+  role: string | null
 }
 
 /** 플랜명 표시용 (free -> Free, pro -> Pro, team -> Team) */
@@ -149,7 +150,7 @@ const profileCache: Record<string, UserProfile> = {}
 async function fetchUserProfile(userId: string): Promise<UserProfile> {
   const { data, error } = await supabase
     .from('users')
-    .select('avatar_url, full_name, total_notes, total_commits, plan, plan_expires_at')
+    .select('avatar_url, full_name, total_notes, total_commits, plan, plan_expires_at, role')
     .eq('id', userId)
     .single()
   if (error || !data) {
@@ -161,6 +162,7 @@ async function fetchUserProfile(userId: string): Promise<UserProfile> {
       plan: 'free',
       plan_expires_at: null,
       pushmind_request_count: 0,
+      role: 'user',
     }
   }
   const today = new Date().toISOString().slice(0, 10)
@@ -179,6 +181,7 @@ async function fetchUserProfile(userId: string): Promise<UserProfile> {
     plan: data.plan ?? 'free',
     plan_expires_at: data.plan_expires_at ?? null,
     pushmind_request_count,
+    role: data.role ?? 'user',
   }
 }
 
@@ -236,7 +239,11 @@ export default function SharedAppLayout({ user, children }: SharedAppLayoutProps
   return (
     <SidebarProvider>
       <div className="flex h-screen w-full bg-background">
-        <AppSidebar userId={user.id} />
+        <AppSidebar
+          userId={user.id}
+          userRole={profile?.role ?? null}
+          onOpenPushMind={() => setShowPushMindChat(true)}
+        />
         <SidebarInset>
           <div className="flex min-h-0 flex-1 flex-col">
             <header className="flex h-14 shrink-0 items-center border-b border-border bg-card">
