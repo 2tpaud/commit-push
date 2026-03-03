@@ -710,7 +710,9 @@ export default function PlanPage() {
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-[#1F2A44]">{meta.icon}<span className="font-semibold">{meta.name}</span></div>
-                {isCurrent && !isPaidPlanExpired && <Badge variant="outline">현재 플랜</Badge>}
+                {isCurrent && (!isPaidCard || billingCycle === 'monthly') && !isPaidPlanExpired && (
+                  <Badge variant="outline">현재 플랜</Badge>
+                )}
               </div>
               <p className="mt-2 text-2xl font-semibold text-foreground">{formatPrice(planId, billingCycle)}</p>
               <p className="mt-1 text-sm text-muted-foreground">{meta.description}</p>
