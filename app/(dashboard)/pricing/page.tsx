@@ -105,23 +105,25 @@ export default function PricingPage() {
             CommitPush
           </span>
         </Link>
-        <nav className="flex items-center gap-6">
+        <nav className="flex items-center gap-4 md:gap-6">
           <Link
             href="#"
-            className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+            className="rounded px-2 py-1 text-sm text-muted-foreground transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
+            style={{ cursor: 'default' }}
           >
             서비스
           </Link>
           <Link
             href="/pricing"
-            className="text-sm font-medium text-foreground"
+            className="rounded px-2 py-1 text-sm text-foreground transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
+            style={{ cursor: 'default' }}
           >
             이용요금
           </Link>
           <Button
             variant="outline"
             size="sm"
-            className="border-input"
+            className="border-input hover:bg-gray-100 dark:hover:bg-gray-800"
             onClick={handleGoogleLogin}
           >
             로그인

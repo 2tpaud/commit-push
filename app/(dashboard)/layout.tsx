@@ -64,7 +64,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
   }, [])
 
-  const publicPaths = ['/', '/login', '/pricing']
+  const publicPaths = ['/', '/login', '/pricing', '/terms', '/privacy']
   const isPublicPath = publicPaths.includes(pathname ?? '')
 
   useEffect(() => {
@@ -100,6 +100,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   if (!user) {
     if (pathname === '/') return <LandingPage />
     if (pathname === '/pricing') return children
+    if (pathname === '/terms' || pathname === '/privacy') return children
     return null
   }
 

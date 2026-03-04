@@ -14,7 +14,7 @@ shadcn/ui
 
 ### Authentication
 
-Supabase Auth (Google OAuth). **주요 라우트**: 공개 — `/`(랜딩), `/pricing`(이용요금). 로그인 필요 — `/plan`(요금제·결제), `/activity`, `/developer-notes`, `/notes/*` 등. `/login`은 `/`로 리다이렉트. 랜딩·이용요금에서 로그인/지금 시작하기 클릭 시 Google OAuth 직접 호출. (라우트·UI 상세는 [DESIGN.md](./DESIGN.md), 요금제는 [PLAN.md](./PLAN.md) 참고.)
+Supabase Auth (Google OAuth). **주요 라우트**: 공개 — `/`(랜딩), `/pricing`(이용요금), `/terms`(서비스 이용약관), `/privacy`(개인정보 처리방침). 로그인 필요 — `/plan`(요금제·결제), `/activity`, `/developer-notes`, `/notes/*` 등. `/login`은 `/`로 리다이렉트. 랜딩·이용요금에서 로그인/지금 시작하기 클릭 시 Google OAuth 직접 호출. (라우트·UI 상세는 [DESIGN.md](./DESIGN.md), 요금제는 [PLAN.md](./PLAN.md) 참고.)
 
 ### Operational Database
 

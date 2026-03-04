@@ -1,92 +1,87 @@
-# 개발자 노트 — NicePay REST 전환·결제 문서·플랜/개발자 노트·PushMind UI 정리
+# 개발자 노트 2 — 랜딩·이용요금·약관/개인정보·헤더/푸터 정리
 
 ---
 
 주요 기능 추가:
 
-- **결제 승인 API (`POST /api/payment/return`) REST 전용 통일**
-  - 나이스페이 승인 호출을 **항상** `POST {NICE_PAY_API_BASE}/v1/payments/{tid}` + `Authorization: Basic base64(clientId:secretKey)`로만 수행.
-  - `resultCode === "0000"`, `amount` 일치, `status === "paid"` 또는 `paidAt` 존재일 때만 승인으로 간주.
-  - 기존 로직(주문 조회, 중복 결제 우회, 금액 검증, 플랜 연장, `payments.status='paid'`, `notifications.payment_approved`)은 그대로 유지.
-- **결제 취소 API (`POST /api/payment/cancel`) REST 전용 통일**
-  - 레거시 `cancel_process.jsp` + MID/MerchantKey/SignData/EdiDate 서명 제거.
-  - 항상 `POST {NICE_PAY_API_BASE}/v1/payments/{tid}/cancel` + Basic 인증, body `{ orderId, amount, reason }` 사용 (`orderId = payment.order_id`, `amount = String(payment.amount)`).
-  - `resultCode === "0000"`일 때만 성공 처리, 401 → `nicepay_auth`, 그 외 → `cancel_failed`.
-- **레거시 NicePay 의존성 제거**
-  - 코드·문서에서 `pay_process.jsp`, `cancel_process.jsp`, `MID`, `MerchantKey`, `SignData`, `EdiDate`, `NICE_PAY_MID`, `NICE_PAY_MERCHANT_KEY`, `NICE_PAY_CANCEL_API_URL` 전부 제거.
-- **문서 최신화**
-  - `ARCHITECTURE.md`, `PLAN.md`, `PAYMENT-TEST-CHECKLIST.md`를 REST + Basic 인증 기준으로 업데이트.
- - **Plan 페이지 월/연 탭·배지 UX 정리**
-   - Pro/Team **월 구독**이 현재 플랜일 때만 해당 카드 상단에 "현재 플랜" 배지를 표시하고, 연 구독 탭에서는 배지를 숨긴 채 연 결제 버튼만 노출.
- - **개발자 노트 권한(admin/owner) 제한 및 아이콘 제어**
-   - `users.role`이 `admin` 또는 `owner`인 경우에만 사이드바 상단 BookOpen(개발자 노트) 아이콘과 `/developer-notes` 페이지 접근 허용.
- - **사이드바 PushMind 아이콘 추가**
-   - 사이드바 상단에 MessageSquare(PushMind) 아이콘을 추가해, 좌측에서 바로 PushMind 챗 패널을 열 수 있도록 함.
+- **비로그인 랜딩/이용요금 헤더·네비게이션 정리**
+  - 랜딩(`/`)·이용요금(`/pricing`) 상단 헤더를 통일: 좌측 CommitPush 로고, 중앙 `서비스`/`이용요금` 텍스트 네비게이션, 우측 `로그인` 버튼 구조로 고정.
+  - `서비스`/`이용요금`은 링크처럼 보이지만 **손가락 커서 대신 기본 커서**를 사용하고, 호버 시에만 옅은 회색(`hover:bg-gray-100`, 다크 `dark:hover:bg-gray-800`) 배경이 적용되도록 변경.
+  - 로그인 버튼은 shadcn Button variant="outline" + `border-input`를 유지하면서, 호버 시 옅은 회색 음영만 들어가도록 통일(`hover:bg-gray-100`, 다크 `dark:hover:bg-gray-800`).
+- **서비스 이용약관·개인정보 처리방침 페이지 추가**
+  - `/terms` 경로에 CommitPush용 **서비스 이용약관** 페이지 추가: 서비스 정의, 이용계약, 요금·결제, 이용자/회사 의무, 책임 제한, 분쟁 해결, 사업자 정보(씨큐브드(C Cubed))까지 포함.
+  - `/privacy` 경로에 CommitPush용 **개인정보 처리방침** 페이지 추가: 수집 항목, 이용 목적, 보유 기간, 제3자 제공·위탁, 쿠키, 안전성 확보조치, 문의처(씨큐브드(C Cubed), 이메일·주소 포함)까지 정리.
+  - 두 페이지 모두 **시행일자(2026-02-16)** 를 명시하고, 서로를 교차 링크(`/terms` ↔ `/privacy`) 하도록 구성.
+- **랜딩 CTA 하단 약관 동의 문구·푸터 사업자 정보 표기**
+  - 랜딩의 `지금 시작하기` 버튼 하단에 `"지금 시작하기 클릭 시 서비스 이용약관 및 개인정보 처리방침에 동의하는 것입니다."` 문구 추가.
+  - 문구 내에서 `서비스 이용약관`은 `/terms`, `개인정보 처리방침`은 `/privacy`로 직접 이동 가능하도록 링크 처리.
+  - 랜딩 최하단에 사업자 정보 푸터 한 줄 추가: `상호: 씨큐브드(C Cubed) ｜ 대표자명: 이세명 ｜ 사업자등록번호: 781-47-00894 ｜ 주소: 경기도 이천시 백사면 원적로617번길 150-18 ｜ 이메일: 2tpaud@gmail.com` + 다음 줄에 `© {연도} 씨큐브드(C Cubed). All rights reserved.` 노출.
+- **비로그인 공개 라우트 확장**
+  - 인증 레이아웃에서 비로그인 시 허용되는 공개 경로에 `/terms`(서비스 이용약관), `/privacy`(개인정보 처리방침)를 추가해, 로그인 없이도 약관·정책을 열람할 수 있도록 구조 정리.
 
 ---
 
 UI·API:
 
-- **결제 승인 API** (`app/api/payment/return/route.ts`)
-  - 입력: 나이스페이 returnUrl 콜백(POST), `authResultCode`, `authResultMsg`, `tid`, `orderId`, `amount`.
-  - 처리:
-    - `authResultCode !== "0000"` 또는 메시지에 “취소/실패” 포함 → `/plan?error=cancelled`.
-    - `order_id`로 `payments` 조회, 금액·상태 검증, `status='paid'`면 중복 승인 없이 성공 처리.
-    - 승인 호출: `POST {NICE_PAY_API_BASE}/v1/payments/{tid}` + Basic, `{ amount: payment.amount }`.
-    - 응답 검증 후 `users.plan`·`plan_expires_at` 연장, `payments.status='paid'`, `tid`, `paid_at`, `notifications.payment_approved` 삽입.
-    - 실패 시 `payments.status='failed'`로 업데이트, 401이면 `/plan?error=nicepay_auth`, 그 외 `/plan?error=approval_failed`.
-- **결제 취소 API** (`app/api/payment/cancel/route.ts`)
-  - 입력: `paymentId`, `reason` (JSON), 인증은 Supabase 세션(쿠키) 우선, 없으면 Authorization: Bearer.
-  - 처리:
-    - `payments`에서 해당 결제 조회, 소유자(`payments.user_id === user.id`) 및 상태(`status='paid'`), 24시간 이내(`paid_at`) 검증, `tid` 필수.
-    - 취소 호출: `POST {NICE_PAY_API_BASE}/v1/payments/{tid}/cancel` + Basic, `{ orderId: payment.order_id, amount: String(payment.amount), reason }`.
-    - `resultCode !== "0000"` → 로그 남기고 HTTP 401이면 `nicepay_auth`, 그 외 `cancel_failed` 리턴.
-    - 성공 시 `payments.status='cancelled'`, `users.plan='free'`, `plan_expires_at=null`, `notifications.payment_cancelled` 삽입.
-- **환경 변수**
-  - 사용: `NEXT_PUBLIC_NICE_PAY_CLIENT_ID`, `NICE_PAY_SECRET_KEY`, `NICE_PAY_API_BASE`, `NEXT_PUBLIC_NICE_PAY_SDK_URL`, `SUPABASE_SERVICE_ROLE_KEY`.
-  - 미사용(삭제 대상): `NICE_PAY_MID`, `NICE_PAY_MERCHANT_KEY`, `NICE_PAY_CANCEL_API_URL` 및 레거시 JSP 전용 값.
-- **Plan 페이지 월/연 탭·배지** (`app/(dashboard)/plan/page.tsx`)
-  - `billingCycle`(월/연 탭 상태)에 따라 가격 표시와 버튼/배지 동작 분리.
-  - `currentPlan === planId`이고 유료 플랜(Pro/Team)이며 만료되지 않은 경우:
-    - 월 탭: 카드 상단에 "현재 플랜" 배지 + 하단에 "구독 취소" 버튼.
-    - 연 탭: 배지는 숨기고 하단에 "결제하기"(연 결제) 버튼만 노출.
-- **개발자 노트 권한 제어** (`app/(dashboard)/developer-notes/page.tsx`, `src/components/AppSidebar.tsx`, `src/components/SharedAppLayout.tsx`)
-  - `SharedAppLayout`에서 `users.role`을 함께 로드해 프로필에 포함.
-  - `AppSidebar`에 `userRole`을 전달해, `role === 'admin'` 또는 `role === 'owner'`일 때만 개발자 노트(BookOpen) 아이콘과 `/developer-notes` prefetch 표시.
-  - `developer-notes` 페이지 진입 시에도 `role`을 조회해 admin/owner가 아니면 노트 목록/작성 UI 대신 접근 제한 메시지 렌더링.
-- **사이드바 PushMind 아이콘** (`src/components/AppSidebar.tsx`, `src/components/SharedAppLayout.tsx`)
-  - `AppSidebar` 상단 아이콘 행에 MessageSquare 버튼 추가, 클릭 시 상위에서 내려준 `onOpenPushMind` 콜백 호출.
-  - `SharedAppLayout`에서 기존 `showPushMindChat` 상태를 유지하면서 `onOpenPushMind={() => setShowPushMindChat(true)}`를 전달해 PushMind 시트를 열도록 연결.
+- **대시보드 레이아웃·공개 라우트** (`app/(dashboard)/layout.tsx`)
+  - 세션 상태에 따라 비로그인 시 허용하는 공개 경로를 `['/', '/login', '/pricing']`에서 `['/', '/login', '/pricing', '/terms', '/privacy']`로 확장.
+  - `loading` 이후 `!user` 인 경우:
+    - `pathname === '/'` → `LandingPage` 렌더,
+    - `'/pricing'`, `'/terms'`, `'/privacy'` → 그대로 `children` 렌더,
+    - 그 외 경로는 `null` 반환(실제 사용자는 `/`로 리다이렉트).
+- **랜딩 페이지 UI** (`src/components/LandingPage.tsx`)
+  - 헤더:
+    - 좌측: CommitPush 로고(`commitpush-logo.png`) + 텍스트.
+    - 중앙: `서비스`, `이용요금` 텍스트 네비게이션 — `rounded px-2 py-1 text-sm text-muted-foreground transition-colors` + `hover:bg-gray-100 dark:hover:bg-gray-800`, `style={{ cursor: 'default' }}`로 손가락 커서 제거.
+    - 우측: 로그인 버튼 — `variant="outline" size="sm" className="border-input hover:bg-gray-100 dark:hover:bg-gray-800"`, 클릭 시 Google OAuth(`supabase.auth.signInWithOAuth`) 바로 호출.
+  - 본문:
+    - 모토·슬로건 문구 하단에 `지금 시작하기` 버튼(시그니처 컬러 배경) 배치.
+    - 버튼 바로 아래 `text-[11px] text-muted-foreground/80` 스타일로 약관 동의 문구 표시, `Link`로 `/terms`, `/privacy` 연결.
+  - 푸터:
+    - `border-t bg-card px-4 py-5 text-[11px] text-muted-foreground` 컨테이너 안에 사업자 정보 한 줄, 그 아래 줄에 `© {연도} 씨큐브드(C Cubed). All rights reserved.` 표시.
+- **이용요금 페이지 UI** (`app/(dashboard)/pricing/page.tsx`)
+  - 헤더:
+    - 랜딩과 동일한 구조/스타일을 사용하도록 refactor:
+      - `nav` gap 조정(`gap-4 md:gap-6`), `서비스`/`이용요금` 텍스트는 랜딩과 같은 hover/커서 스타일(`hover:bg-gray-100 dark:hover:bg-gray-800`, `cursor: default`).
+      - 로그인 버튼은 outline + `hover:bg-gray-100 dark:hover:bg-gray-800`로 Landing과 동일하게 통일.
+  - 본문:
+    - 상단 제목/부제 + 우측 상단 **Tabs** 를 사용한 월/연 구독 탭(`TabsList`, `TabsTrigger`).
+    - Free/Pro/Team 카드에서 Plan 페이지와 동일한 가격·한도·PushMind 기능 설명만 노출하고, 실제 결제/구독 버튼은 두지 않음.
+    - 하단 `지금 시작하기` 버튼은 Landing과 동일하게 Google OAuth로 바로 진입.
+- **서비스 이용약관 페이지** (`app/(dashboard)/terms/page.tsx`)
+  - CommitPush 서비스 정의, 이용계약, 요금 및 결제, 이용자 의무, 회사 의무, 개인정보 보호, 서비스 중단, 책임 제한, 분쟁 해결, 사업자 정보 섹션으로 구성.
+  - 사업자 정보: `상호: 씨큐브드(C Cubed)`, `대표자명: 이세명`, `사업자등록번호: 781-47-00894`, `주소: 경기도 이천시 백사면 원적로617번길 150-18`, `이메일: 2tpaud@gmail.com`.
+  - 개인정보 보호 조항에서 `/privacy` 페이지로 링크 연결.
+- **개인정보 처리방침 페이지** (`app/(dashboard)/privacy/page.tsx`)
+  - 수집 항목, 이용 목적, 보유·이용 기간, 제3자 제공, 처리 위탁, 이용자 권리, 쿠키 사용, 안전성 확보조치, 제3자 서비스, 개인정보 보호책임자 및 문의처 등 일반적인 SaaS 개인정보 처리방침 구조.
+  - PushMind, Supabase, 나이스페이 등 외부 서비스 사용을 현재 아키텍처 수준에서 설명.
+  - 문의처/책임자 정보에 씨큐브드(C Cubed) 상호, 이메일, 주소를 명시하고, 마지막에 시행일자 표기.
 
 ---
 
 문서화:
 
 - **ARCHITECTURE.md**
-  - `/api/payment/return`, `/api/payment/cancel` 설명을 REST v1 + Basic 인증 한 가지 경로로만 서술.
-  - 승인/취소 성공 조건, 오류 코드(`nicepay_auth`, `approval_failed`, `cancel_failed`)를 현재 구현 기준으로 정리.
-  - 레거시 pay_process/cancel_process + MID/MerchantKey/SignData/EdiDate 관련 문구 삭제.
-- **PLAN.md**
-  - 5.1 환경 변수에서 MID/MERCHANT_KEY/CANCEL_API_URL 제거, REST용 env만 남김.
-  - 5.2: 승인 경로를 `POST {NICE_PAY_API_BASE}/v1/payments/{tid}` + Basic 한 가지로 명시.
-  - 5.3: 취소 경로를 `POST {NICE_PAY_API_BASE}/v1/payments/{tid}/cancel` + Basic, `resultCode='0000'` 기준으로 설명.
-- **PAYMENT-TEST-CHECKLIST.md**
-  - 사전 준비에서 MID/MerchantKey 제거, REST용 env만 체크.
-  - 취소 테스트를 “REST 취소 API `resultCode='0000'` 기준으로 `payments.status='cancelled'`”로 정리, 가맹점키/서명 관련 내용 삭제.
-- **DESIGN.md / DATABASE.md / PRODUCT.md / PUSHMIND-RAG.md**
-  - 결제 레이어 의존성이 없는 부분(제품 개념, RAG, DB 구조 등)은 현 상태 유지.
+  - Authentication 섹션에서 **공개 라우트**를 `/`(랜딩), `/pricing`(이용요금)에 더해 `/terms`(서비스 이용약관), `/privacy`(개인정보 처리방침)까지 포함하도록 설명 업데이트.
+  - 기타 결제·PushMind 아키텍처 설명은 이전 개발자 노트 기준(NicePay REST, PushMind RAG)과 동일하게 유지.
+- **DESIGN.md**
+  - "라우트 그룹 (dashboard) 및 인증" 섹션에서 비로그인 공개 경로 목록에 `/terms`, `/privacy`를 추가해, UI/UX 관점에서도 약관/정책 페이지 접근이 명확히 드러나도록 수정.
+  - "랜딩 페이지 (비로그인 홈)" 섹션을 현재 구현 기준으로 상세화:
+    - 헤더 구조(로고, `서비스`/`이용요금`, 로그인), 네비게이션 hover/커서 스타일, 로그인 버튼 hover 배경, `지금 시작하기` 하단 동의 문구, `/terms`·`/privacy` 링크, 푸터 사업자 정보 한 줄 레이아웃까지 기술.
+  - "이용요금 페이지 (비로그인 공개)" 섹션을 현재 UI 기준으로 확장:
+    - 랜딩과 동일한 헤더/스타일 사용, 월/연 구독 탭, Free/Pro/Team 카드 구조, 하단 CTA 버튼 동작(로그인/회원가입 진입)까지 반영.
+- **기타 문서**
+  - `DATABASE.md`, `PAYMENT-TEST-CHECKLIST.md`, `PLAN.md`, `PRODUCT.md`, `PUSHMIND-RAG.md`는 본 작업(랜딩/이용요금, 약관/개인정보, 헤더/푸터)과 직접적인 스키마·플로우 변경이 없어 내용 유지.
 
 ---
 
 파일 구조:
 
-- `app/api/payment/return/route.ts` — NicePay returnUrl 처리, REST 승인 API 호출, `users`·`payments`·`notifications` 갱신.
-- `app/api/payment/cancel/route.ts` — Plan 페이지에서 24시간 이내 결제 취소 처리, REST 취소 API 호출.
-- `app/api/payment/webhook/route.ts` — 나이스페이 웹훅(승인/취소 이벤트) 처리, 승인/취소 멱등 반영.
-- `app/(dashboard)/plan/page.tsx` — 요금제/결제 UI, 결제하기/결제취소 버튼, 청구 내역 테이블.
-- `docs/ARCHITECTURE.md` — API 레이어·환경 변수 구조 최신화(REST 기준).
-- `docs/PLAN.md` — 플랜/결제 흐름·env·승인/취소 API 설명 최신화(REST 기준).
-- `docs/PAYMENT-TEST-CHECKLIST.md` — 결제/취소 테스트 체크리스트 REST 기준으로 정리.
- - `src/components/AppSidebar.tsx` — 사이드바 상단 아이콘 행(PushMind(MessageSquare), 개발자 노트(BookOpen)), 대분류·중분류·소분류 트리, 최근 항목.
- - `src/components/SharedAppLayout.tsx` — 헤더(커밋푸시/새 노트/알림/프로필), 사이드바, PushMind 패널 상태 관리(`showPushMindChat`), 프로필(`users.role` 포함) 로딩.
- - `app/(dashboard)/developer-notes/page.tsx` — 개발자 노트 목록/작성/조회/삭제 UI, `users.role` 기반 접근 제어(admin/owner 전용).
+- `src/components/LandingPage.tsx` — 비로그인 랜딩 페이지 UI, 헤더(서비스/이용요금/로그인), 모토·슬로건, `지금 시작하기` 버튼, 하단 동의 문구, 사업자 정보 푸터.
+- `app/(dashboard)/pricing/page.tsx` — 비로그인 이용요금 페이지, 랜딩과 동일한 헤더, 월/연 구독 탭 + Free/Pro/Team 카드, 하단 `지금 시작하기` 버튼.
+- `app/(dashboard)/layout.tsx` — 대시보드 공통 레이아웃 및 인증 라우팅, 비로그인 공개 경로(`/`, `/pricing`, `/terms`, `/privacy`) 처리.
+- `app/(dashboard)/terms/page.tsx` — CommitPush 서비스 이용약관 페이지, 서비스 정의·이용계약·요금·책임·분쟁 해결·사업자 정보.
+- `app/(dashboard)/privacy/page.tsx` — CommitPush 개인정보 처리방침 페이지, 수집 항목·이용 목적·보유 기간·제3자 제공·위탁·쿠키·보호조치·문의처.
+- `docs/ARCHITECTURE.md` — Authentication 섹션 공개 라우트 목록에 `/terms`·`/privacy` 추가.
+- `docs/DESIGN.md` — 라우트 그룹 공개 경로, 랜딩/이용요금 페이지 헤더/CTA/푸터·약관 동의 문구·링크 구조 최신화.
+

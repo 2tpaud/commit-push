@@ -32,23 +32,25 @@ export default function LandingPage() {
             CommitPush
           </span>
         </Link>
-        <nav className="flex items-center gap-6">
+        <nav className="flex items-center gap-4 md:gap-6">
           <Link
             href="#"
-            className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+            className="rounded px-2 py-1 text-sm text-muted-foreground transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
+            style={{ cursor: 'default' }}
           >
             서비스
           </Link>
           <Link
             href="/pricing"
-            className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+            className="rounded px-2 py-1 text-sm text-muted-foreground transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
+            style={{ cursor: 'default' }}
           >
             이용요금
           </Link>
           <Button
             variant="outline"
             size="sm"
-            className="border-input"
+            className="border-input hover:bg-gray-100 dark:hover:bg-gray-800"
             onClick={handleGoogleLogin}
           >
             로그인
@@ -57,7 +59,7 @@ export default function LandingPage() {
       </header>
 
       <main className="flex flex-1 flex-col items-center justify-center px-4 py-12">
-        <div className="mx-auto max-w-[520px] space-y-8 text-center">
+        <div className="mx-auto max-w-[520px] space-y-6 text-center">
           <div className="space-y-4">
             <h1 className="text-3xl font-bold tracking-tight text-foreground md:text-4xl">
               <span className="block whitespace-nowrap">"당신의 작업을 커밋처럼 기록하고,</span>
@@ -67,15 +69,38 @@ export default function LandingPage() {
               생각과 업무를 버전관리하는 시스템을 지향합니다
             </p>
           </div>
-          <Button
-            size="lg"
-            className="bg-[#1F2A44] text-white hover:bg-[#1F2A44]/90"
-            onClick={handleGoogleLogin}
-          >
-            지금 시작하기
-          </Button>
+          <div className="space-y-3">
+            <Button
+              size="lg"
+              className="bg-[#1F2A44] text-white hover:bg-[#1F2A44]/90"
+              onClick={handleGoogleLogin}
+            >
+              지금 시작하기
+            </Button>
+            <p className="mt-1 text-[11px] text-muted-foreground/80">
+              지금 시작하기 클릭 시{' '}
+              <Link href="/terms" className="underline underline-offset-4">
+                서비스 이용약관
+              </Link>{' '}
+              및{' '}
+              <Link href="/privacy" className="underline underline-offset-4">
+                개인정보 처리방침
+              </Link>
+              에 동의하는 것입니다.
+            </p>
+          </div>
         </div>
       </main>
+      <footer className="border-t border-border bg-card px-4 py-5 text-[11px] text-muted-foreground">
+        <div className="mx-auto max-w-5xl space-y-1 text-center">
+          <div>
+            상호: 씨큐브드(C Cubed) ｜ 대표자명: 이세명 ｜ 사업자등록번호: 781-47-00894 ｜ 주소: 경기도 이천시 백사면 원적로617번길 150-18 ｜ 이메일: 2tpaud@gmail.com
+          </div>
+          <div className="text-[10px]">
+            © {new Date().getFullYear()} 씨큐브드(C Cubed). All rights reserved.
+          </div>
+        </div>
+      </footer>
     </div>
   )
 }
