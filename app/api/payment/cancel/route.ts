@@ -106,7 +106,8 @@ export async function POST(request: Request) {
       Authorization: `Basic ${getBasicAuth()}`,
     },
     body: JSON.stringify({
-      amount: payment.amount,
+      orderId: payment.order_id,
+      amount: String(payment.amount),
       reason,
     }),
   })

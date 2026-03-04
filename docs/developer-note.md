@@ -10,7 +10,7 @@
   - 기존 로직(주문 조회, 중복 결제 우회, 금액 검증, 플랜 연장, `payments.status='paid'`, `notifications.payment_approved`)은 그대로 유지.
 - **결제 취소 API (`POST /api/payment/cancel`) REST 전용 통일**
   - 레거시 `cancel_process.jsp` + MID/MerchantKey/SignData/EdiDate 서명 제거.
-  - 항상 `POST {NICE_PAY_API_BASE}/v1/payments/{tid}/cancel` + Basic 인증, body `{ amount, reason }` 사용.
+  - 항상 `POST {NICE_PAY_API_BASE}/v1/payments/{tid}/cancel` + Basic 인증, body `{ orderId, amount, reason }` 사용 (`orderId = payment.order_id`, `amount = String(payment.amount)`).
   - `resultCode === "0000"`일 때만 성공 처리, 401 → `nicepay_auth`, 그 외 → `cancel_failed`.
 - **레거시 NicePay 의존성 제거**
   - 코드·문서에서 `pay_process.jsp`, `cancel_process.jsp`, `MID`, `MerchantKey`, `SignData`, `EdiDate`, `NICE_PAY_MID`, `NICE_PAY_MERCHANT_KEY`, `NICE_PAY_CANCEL_API_URL` 전부 제거.
@@ -39,7 +39,7 @@ UI·API:
   - 입력: `paymentId`, `reason` (JSON), 인증은 Supabase 세션(쿠키) 우선, 없으면 Authorization: Bearer.
   - 처리:
     - `payments`에서 해당 결제 조회, 소유자(`payments.user_id === user.id`) 및 상태(`status='paid'`), 24시간 이내(`paid_at`) 검증, `tid` 필수.
-    - 취소 호출: `POST {NICE_PAY_API_BASE}/v1/payments/{tid}/cancel` + Basic, `{ amount, reason }`.
+    - 취소 호출: `POST {NICE_PAY_API_BASE}/v1/payments/{tid}/cancel` + Basic, `{ orderId: payment.order_id, amount: String(payment.amount), reason }`.
     - `resultCode !== "0000"` → 로그 남기고 HTTP 401이면 `nicepay_auth`, 그 외 `cancel_failed` 리턴.
     - 성공 시 `payments.status='cancelled'`, `users.plan='free'`, `plan_expires_at=null`, `notifications.payment_cancelled` 삽입.
 - **환경 변수**
